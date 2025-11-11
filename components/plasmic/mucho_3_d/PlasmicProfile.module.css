@@ -1,0 +1,216 @@
+.profile {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  justify-content: flex-start;
+  align-items: stretch;
+  grid-column-start: 1 !important;
+  grid-column-end: -1 !important;
+  min-height: 0;
+}
+.img__c34Bg {
+  position: absolute;
+  object-fit: cover;
+  max-width: 100%;
+  left: auto;
+  top: 1198px;
+}
+.img__c34Bg > picture > img {
+  object-fit: cover;
+}
+.img__vUg8U {
+  position: absolute;
+  object-fit: cover;
+  max-width: 100%;
+  max-height: none;
+  height: auto;
+  width: 774px;
+  left: 0px;
+  top: 1159px;
+}
+.img__vUg8U > picture > img {
+  object-fit: cover;
+}
+.img__ayN3 {
+  position: absolute;
+  object-fit: cover;
+  max-width: 100%;
+  max-height: none;
+  height: auto;
+  width: auto;
+  left: auto;
+  top: 754px;
+  object-position: right center;
+  align-self: flex-end;
+}
+.img__ayN3 > picture > img {
+  object-fit: cover;
+  object-position: right center;
+}
+.diagramSection:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+}
+.gallerySection:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+}
+.home:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+}
+.pricingSection:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+  display: none;
+}
+.freeBox__n5K9W {
+  display: flex;
+  position: relative;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-between;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px;
+}
+.columns {
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: auto;
+  align-items: stretch;
+  flex-shrink: 1;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  column-gap: 52px;
+  min-width: 0;
+  --plsmc-rc-col-gap: 52px;
+  padding: 0px;
+}
+.columns > :nth-child(3n + 1) {
+  width: calc((100% - 2 * var(--plsmc-rc-col-gap, 0px)) * 4 / 12);
+}
+.columns > :nth-child(3n + 2) {
+  width: calc((100% - 2 * var(--plsmc-rc-col-gap, 0px)) * 4 / 12);
+}
+.columns > :nth-child(3n + 3) {
+  width: calc((100% - 2 * var(--plsmc-rc-col-gap, 0px)) * 4 / 12);
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .columns {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    --plsmc-rc-col-gap: 52px;
+  }
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .columns > :nth-child(1n + 1) {
+    width: calc((100% - 0 * var(--plsmc-rc-col-gap, 0px)) * 12 / 12);
+  }
+}
+.column__f6Q60 {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 0px;
+}
+.priceCard__pj2Xc:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+  margin-bottom: 30px;
+}
+.column__wkngH {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 0px;
+}
+.priceCard__mh80P:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .priceCard__mh80P:global(.__wab_instance) {
+    margin-top: 30px;
+  }
+}
+.freeBox__m7BcT {
+  display: flex;
+  position: absolute;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  left: 0px;
+  top: -57px;
+  align-self: center;
+  min-width: 0;
+  padding: 8px;
+}
+.text {
+  position: absolute;
+  width: auto;
+  height: auto;
+  max-width: 800px;
+  text-align: center;
+  background: #185adb;
+  color: #ffffff;
+  font-family: "Montserrat", sans-serif;
+  font-size: 24px;
+  align-self: center;
+  left: auto;
+  top: 45px;
+  font-weight: 500;
+  border-radius: 10px;
+  padding: 8px 20px;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .text {
+    top: 85px;
+    font-size: 14px;
+  }
+}
+.column__jD8L5 {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 0px;
+}
+.priceCard__wle6T:global(.__wab_instance) {
+  max-width: 100%;
+  position: relative;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .priceCard__wle6T:global(.__wab_instance) {
+    margin-top: 30px;
+  }
+}

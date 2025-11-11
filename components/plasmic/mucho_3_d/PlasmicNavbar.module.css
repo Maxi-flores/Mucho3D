@@ -1,0 +1,129 @@
+.root {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  position: relative;
+  justify-content: center;
+  height: 100%;
+  column-gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0px 16px;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .root {
+    padding: 32px;
+  }
+}
+.freeBox__vqb7M {
+  display: flex;
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: var(--token-MeAeDHiwi6TF);
+  padding-top: 52px;
+  padding-bottom: 52px;
+  height: 100%;
+  max-height: 154px;
+  column-gap: 16px;
+  min-width: 0;
+  min-height: 0;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .freeBox__vqb7M {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 3px;
+    padding-bottom: 0px;
+    max-height: 500px;
+    height: 100%;
+    row-gap: 16px;
+    column-gap: 0px;
+    min-height: 0;
+  }
+}
+.freeBox__sJb3V {
+  display: flex;
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  column-gap: 32px;
+  min-width: 0;
+}
+@media (min-width: 0px) and (max-width: 930px) {
+  .freeBox__sJb3V {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+  }
+}
+.link__pyO7M {
+  display: flex;
+  font-size: 1rem;
+}
+.text__fxr70 {
+  white-space: pre;
+  color: #eeeeee;
+}
+.link__q4Rey {
+  display: flex;
+  font-size: 1rem;
+}
+.text__adPHg {
+  white-space: pre;
+  color: #eeeeee;
+}
+.link__bom4 {
+  display: flex;
+  font-size: 1rem;
+}
+.text__qdBg7 {
+  white-space: pre;
+  color: #eeeeee;
+}
+.link__vLt1 {
+  display: flex;
+  font-size: 1rem;
+}
+.text__zUwbj {
+  white-space: pre;
+  color: #eeeeee;
+}
+.freeBox__xuxLi {
+  display: flex;
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  column-gap: 32px;
+}
+.link__yXAuN {
+  display: flex;
+  font-size: 1rem;
+}
+.text__lIol {
+  white-space: pre;
+  color: #eeeeee;
+}
+.button:global(.__wab_instance):global(.__wab_instance) {
+  max-width: 100%;
+}
+.svg__mTYsJ {
+  position: relative;
+  height: 1em;
+}
+.text__wAsMo {
+  white-space: pre;
+  color: #eeeeee;
+}
+.svg___3Y7F {
+  position: relative;
+  height: 1em;
+}
