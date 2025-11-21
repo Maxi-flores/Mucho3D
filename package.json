@@ -1,0 +1,23 @@
+{
+  "name": "mucho3d",
+  "version": "1.0.0",
+  "description": "Mucho3D – Next.js + Plasmic project",
+  "main": "index.js",
+  "scripts": {
+    "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Max",
+  "license": "ISC",
+  "dependencies": {
+    "@plasmicapp/loader-nextjs": "^1.0.445",
+    "@plasmicapp/loader-react": "^1.0.404",
+    "@plasmicapp/react-web": "^0.2.408",
+    "next": "^16.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
