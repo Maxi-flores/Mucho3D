@@ -1,0 +1,132 @@
+/* ============================================
+   Mucho3D — Next-Gen 3D/AI Engineering Theme
+   Dark Mode • Glassmorphism • Engineering Feel
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ─── Core Palette ─── */
+  --bg-primary: #050505;
+  --bg-secondary: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-surface: #1a1a1a;
+
+  /* ─── Accent Colors ─── */
+  --accent-cyber: #00A3FF;
+  --accent-cyber-dim: rgba(0, 163, 255, 0.15);
+  --accent-cyber-glow: rgba(0, 163, 255, 0.4);
+  --accent-slate: #1E293B;
+  --accent-slate-light: #334155;
+
+  /* ─── Text ─── */
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --text-accent: #00A3FF;
+
+  /* ─── Borders & Glass ─── */
+  --border-glass: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-accent: rgba(0, 163, 255, 0.2);
+
+  /* ─── Glassmorphism ─── */
+  --glass-bg: rgba(17, 17, 17, 0.7);
+  --glass-bg-heavy: rgba(10, 10, 10, 0.85);
+  --glass-blur: 12px;
+
+  /* ─── Spacing ─── */
+  --sidebar-width: 260px;
+  --sidebar-collapsed: 56px;
+  --hud-padding: 16px;
+  --header-height: 48px;
+
+  /* ─── Transitions ─── */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Typography ─── */
+  --font-mono: 'JetBrains Mono', 'Geist Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ─── Reset & Base ─── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#__next {
+  height: 100%;
+}
+
+a {
+  color: var(--accent-cyber);
+  text-decoration: none;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-slate);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-slate-light);
+}
+
+/* ─── Utility Classes ─── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+}
+
+.glass-panel-heavy {
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+}
+
+.text-accent {
+  color: var(--accent-cyber);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px var(--accent-cyber-dim),
+    0 0 60px rgba(0, 163, 255, 0.05);
+}

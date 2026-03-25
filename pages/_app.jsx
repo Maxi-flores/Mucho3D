@@ -1,5 +1,6 @@
 import { PlasmicRootProvider } from "@plasmicapp/loader-nextjs";
 import { PLASMIC } from "../plasmic-init";
+import "../styles/theme.css";
 
 export default function MyApp({ Component, pageProps }) {
   return (
