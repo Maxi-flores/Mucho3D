@@ -1,13 +1,9 @@
-import { PlasmicRootProvider } from "@plasmicapp/loader-nextjs";
-import { PLASMIC } from "../plasmic-init";
+import "../styles/globals.css";
 
 export default function MyApp({ Component, pageProps }) {
   return (
-    <PlasmicRootProvider
-      loader={PLASMIC}
-      prefetchedData={pageProps?.__plasmicLoaderData}
-    >
+    <div className="dark">
       <Component {...pageProps} />
-    </PlasmicRootProvider>
+    </div>
   );
 }
