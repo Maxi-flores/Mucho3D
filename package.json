@@ -16,8 +16,17 @@
     "@plasmicapp/loader-nextjs": "^1.0.445",
     "@plasmicapp/loader-react": "^1.0.404",
     "@plasmicapp/react-web": "^0.2.408",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "next": "^16.0.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/three": "^0.183.1",
+    "typescript": "^6.0.2"
   }
 }

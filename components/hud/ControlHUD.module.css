@@ -1,0 +1,172 @@
+.hudOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ─── Stats Panel (Top-Left) ─── */
+.statsPanel {
+  position: absolute;
+  top: var(--hud-padding);
+  left: var(--hud-padding);
+  pointer-events: auto;
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 180px;
+}
+
+.statsPanelTitle {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.statsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.statLabel {
+  color: var(--text-secondary);
+}
+
+.statValue {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.statValueAccent {
+  color: var(--accent-cyber);
+  font-weight: 500;
+}
+
+/* ─── Camera Info (Top-Right) ─── */
+.cameraPanel {
+  position: absolute;
+  top: var(--hud-padding);
+  right: var(--hud-padding);
+  pointer-events: auto;
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.cameraPanelTitle {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.cameraCoords {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.coordItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.coordLabel {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.coordValue {
+  color: var(--text-primary);
+}
+
+/* ─── Tools Panel (Bottom-Left) ─── */
+.toolsPanel {
+  position: absolute;
+  bottom: var(--hud-padding);
+  left: var(--hud-padding);
+  pointer-events: auto;
+  display: flex;
+  gap: 4px;
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.toolBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  transition: all var(--transition-fast);
+  font-family: var(--font-mono);
+}
+
+.toolBtn:hover {
+  background: var(--accent-slate);
+  color: var(--text-primary);
+}
+
+.toolBtnActive {
+  composes: toolBtn;
+  background: var(--accent-cyber-dim);
+  border-color: var(--border-accent);
+  color: var(--accent-cyber);
+}
+
+/* ─── Info Badge (Bottom-Right) ─── */
+.infoBadge {
+  position: absolute;
+  bottom: var(--hud-padding);
+  right: var(--hud-padding);
+  pointer-events: auto;
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.infoDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-cyber);
+  box-shadow: 0 0 8px var(--accent-cyber-glow);
+}
