@@ -1,31 +1,23 @@
 import { useEffect, useState } from 'react'
-import { useThree } from '@react-three/fiber'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSceneStore } from '@/store'
 import { fadeInUp } from '@/lib/animations'
 import { Badge } from '@/components/ui'
 
+/**
+ * FloatingHUD - Technical heads-up display for 3D scene
+ *
+ * IMPORTANT: This component uses NO R3F hooks.
+ * Camera position is updated by CameraTracker component inside Canvas.
+ * FPS and stats are read from Zustand store.
+ */
 export function FloatingHUD() {
   const showHUD = useSceneStore((state) => state.showHUD)
   const stats = useSceneStore((state) => state.stats)
-  const { camera } = useThree()
-  const [cameraPosition, setCameraPosition] = useState({ x: 0, y: 0, z: 0 })
+  const cameraPosition = useSceneStore((state) => state.cameraPosition)
   const [fps, setFps] = useState(60)
 
-  // Update camera position
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCameraPosition({
-        x: parseFloat(camera.position.x.toFixed(2)),
-        y: parseFloat(camera.position.y.toFixed(2)),
-        z: parseFloat(camera.position.z.toFixed(2)),
-      })
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [camera])
-
-  // Calculate FPS
+  // Calculate FPS using requestAnimationFrame
   useEffect(() => {
     let lastTime = performance.now()
     let frames = 0
@@ -72,15 +64,15 @@ export function FloatingHUD() {
             <div className="space-y-1 font-mono text-xs">
               <div className="flex justify-between gap-4">
                 <span className="text-white/60">X:</span>
-                <span className="text-primary">{cameraPosition.x}</span>
+                <span className="text-primary">{cameraPosition[0]}</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-white/60">Y:</span>
-                <span className="text-primary">{cameraPosition.y}</span>
+                <span className="text-primary">{cameraPosition[1]}</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-white/60">Z:</span>
-                <span className="text-primary">{cameraPosition.z}</span>
+                <span className="text-primary">{cameraPosition[2]}</span>
               </div>
             </div>
           </div>

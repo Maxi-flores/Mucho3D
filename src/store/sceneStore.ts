@@ -13,6 +13,8 @@ interface SceneState {
   // Camera
   camera: CameraState
   updateCamera: (updates: Partial<CameraState>) => void
+  cameraPosition: [number, number, number]
+  setCameraPosition: (pos: [number, number, number]) => void
 
   // Grid
   showGrid: boolean
@@ -39,6 +41,10 @@ interface SceneState {
   // Lights
   ambientIntensity: number
   setAmbientIntensity: (intensity: number) => void
+
+  // Export/Import
+  exportAsJSON: () => string
+  importFromJSON: (json: string) => void
 }
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -80,6 +86,8 @@ export const useSceneStore = create<SceneState>((set) => ({
     set((state) => ({
       camera: { ...state.camera, ...updates },
     })),
+  cameraPosition: [5, 5, 5],
+  setCameraPosition: (pos) => set({ cameraPosition: pos }),
 
   // Grid
   showGrid: true,
@@ -115,4 +123,41 @@ export const useSceneStore = create<SceneState>((set) => ({
   // Lights
   ambientIntensity: 0.5,
   setAmbientIntensity: (intensity) => set({ ambientIntensity: intensity }),
+
+  // Export/Import
+  exportAsJSON: () => {
+    const state = useSceneStore.getState()
+    return JSON.stringify(
+      {
+        version: '3.0.0',
+        timestamp: new Date().toISOString(),
+        objects: state.objects,
+        camera: state.camera,
+        settings: {
+          ambientIntensity: state.ambientIntensity,
+          showGrid: state.showGrid,
+          showWireframe: state.showWireframe,
+        },
+      },
+      null,
+      2
+    )
+  },
+
+  importFromJSON: (json) => {
+    try {
+      const data = JSON.parse(json)
+      if (data.objects && Array.isArray(data.objects)) {
+        set({
+          objects: data.objects,
+          camera: data.camera || { position: [5, 5, 5], target: [0, 0, 0], fov: 75, zoom: 1 },
+          ambientIntensity: data.settings?.ambientIntensity || 0.5,
+          showGrid: data.settings?.showGrid !== false,
+          showWireframe: data.settings?.showWireframe !== false,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to import scene:', error)
+    }
+  },
 }))

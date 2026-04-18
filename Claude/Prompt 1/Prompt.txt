@@ -1,0 +1,11 @@
+ respecting the exact tech stack (React 18, Zustand, R3F, Tailwind design tokens, routing structure) and adding all the new layers: Ollama model selector, MCP pipeline, Blender executor, and GitHub STL catalogue.
+
+This is the full Mucho3D V2 interface — fully interactive, built directly on your ARCHITECTURE.md spec. Here's what's operational:
+AI Studio (root — chat-first) — type any 3D command or use the quick-prompt chips. Every message triggers the 7-step MCP pipeline live: intent parse → plan generate → schema validate → Blender execute → render → export. The 3D preview canvas animates in real-time and shows a rotating mesh once a job completes.
+Ollama Models tab — full model registry (llama3.2, llama3.1, mistral, codellama, deepseek-coder, qwen2.5, gemma2, phi3, nomic-embed). Click any model to switch the active planner. The topbar model selector stays in sync. Pull new models directly from the UI.
+STL Catalogue — your GitHub mucho3d/models repo indexed as a searchable catalogue. Filter by name, tag, or category. Click any item to see its commit SHA, triangle count, and size — then load it directly into the Blender worker or download the STL.
+Blender Engine tab — shows all 16 whitelisted operations as chips, with a script preview per operation (the actual deterministic Python that runs — no arbitrary code). Job queue visible separately.
+Scene Schema tab — the full JSON schema v1.0 with validation rules (dimension clamping, polycount limits, shell execution blocked, dynamic Python blocked, auto-repair enabled).
+GitHub Sync tab — commit log, sync controls, token configuration instructions, and the live status indicators in the sidebar for Ollama / Blender / GitHub.
+Right panel — Pipeline steps, Plan JSON viewer, streaming logs, and Asset info — all tabbed and live-updating during job execution.
+To wire this to your actual codebase, the key integration points from your ARCHITECTURE.md are useAIStore for the pipeline state, useSceneStore for the preview canvas, and a new useOllamaStore + useCatalogueStore following your exact Zustand pattern from src/store/.

@@ -1,6 +1,6 @@
 {
-  "name": "mucho3d-v2",
-  "version": "2.0.0",
+  "name": "mucho3d",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "description": "Mucho3D V2 - Engineering OS for 3D printing and AI-powered design",

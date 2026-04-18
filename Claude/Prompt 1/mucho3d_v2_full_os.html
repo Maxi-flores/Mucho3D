@@ -1,0 +1,720 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--bg1:#0d1117;--bg2:#161b22;--bg3:#21262d;
+  --accent:#00A3FF;--accent2:#00ff88;--accent3:#ff6b35;
+  --text:#e6edf3;--text2:#8b949e;--text3:#484f58;
+  --border:#30363d;--border2:#21262d;
+  --red:#f85149;--amber:#d29922;--green:#3fb950;--purple:#a371f7;
+  --mono:'JetBrains Mono',monospace;--sans:'Segoe UI',system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.5}
+.app{display:flex;height:820px;overflow:hidden}
+.sidebar{width:220px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:42px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;flex-shrink:0}
+.content{flex:1;display:flex;overflow:hidden}
+.logo{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);letter-spacing:2px;padding:14px 16px 10px;border-bottom:1px solid var(--border2)}
+.logo span{color:var(--text2);font-size:10px;font-weight:400;display:block;letter-spacing:1px;margin-top:2px}
+.nav-section{padding:8px 0}
+.nav-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:6px 16px 4px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;color:var(--text2);font-size:12px;transition:all .15s;border-left:2px solid transparent}
+.nav-item:hover{color:var(--text);background:var(--bg2)}
+.nav-item.active{color:var(--accent);background:rgba(0,163,255,.08);border-left-color:var(--accent)}
+.nav-icon{width:14px;height:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.status-bar{margin-top:auto;border-top:1px solid var(--border2);padding:10px 12px}
+.status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;flex-shrink:0}
+.status-row{display:flex;align-items:center;gap:4px;padding:2px 0;font-size:11px;color:var(--text2)}
+.status-row.ok .status-dot{background:var(--green)}
+.status-row.warn .status-dot{background:var(--amber);animation:pulse 1.5s infinite}
+.status-row.err .status-dot{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.tb-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-family:var(--mono);background:rgba(0,163,255,.12);color:var(--accent);border:1px solid rgba(0,163,255,.2)}
+.tb-model{font-size:11px;color:var(--text2);margin-left:auto;display:flex;align-items:center;gap:6px}
+.tb-model select{background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:3px 6px;border-radius:4px;font-family:var(--mono);cursor:pointer}
+.panel{height:100%;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.panel::-webkit-scrollbar{width:4px}
+.panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.chat-panel{flex:1;display:flex;flex-direction:column;border-right:1px solid var(--border);min-width:0}
+.right-panel{width:340px;display:flex;flex-direction:column;flex-shrink:0}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.chat-msgs::-webkit-scrollbar{width:4px}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border)}
+.msg{max-width:90%;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6}
+.msg.user{background:rgba(0,163,255,.12);border:1px solid rgba(0,163,255,.2);color:var(--text);align-self:flex-end}
+.msg.ai{background:var(--bg2);border:1px solid var(--border);color:var(--text);align-self:flex-start}
+.msg.sys{background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.15);color:var(--text2);font-family:var(--mono);font-size:11px;align-self:stretch}
+.msg-label{font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.chat-input-area{padding:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.chat-input-row{display:flex;gap:8px;align-items:flex-end}
+.chat-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:12px;font-family:var(--sans);resize:none;min-height:38px;max-height:120px;outline:none}
+.chat-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,163,255,.15)}
+.btn{padding:7px 14px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg2);color:var(--text2);transition:all .15s;font-family:var(--sans)}
+.btn:hover{color:var(--text);border-color:var(--text3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#000;font-weight:600}
+.btn.primary:hover{background:#0099ee}
+.btn.sm{padding:4px 10px;font-size:11px}
+.btn.danger{border-color:rgba(248,81,73,.4);color:var(--red)}
+.btn.success{border-color:rgba(63,185,80,.4);color:var(--green)}
+.section-head{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;padding:10px 14px 6px;border-bottom:1px solid var(--border2)}
+.pipeline-steps{padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.pipe-step{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;font-size:11px;font-family:var(--mono)}
+.pipe-step.done{color:var(--green);background:rgba(63,185,80,.06)}
+.pipe-step.active{color:var(--accent);background:rgba(0,163,255,.08);animation:stepblink .8s infinite}
+.pipe-step.wait{color:var(--text3)}
+.pipe-step.err{color:var(--red);background:rgba(248,81,73,.06)}
+@keyframes stepblink{0%,100%{opacity:1}50%{opacity:.6}}
+.pipe-icon{width:12px;text-align:center;flex-shrink:0}
+.plan-json{padding:10px 14px;font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto}
+.catalogue-grid{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.cat-item{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;transition:all .15s}
+.cat-item:hover{border-color:var(--accent);background:rgba(0,163,255,.05)}
+.cat-item.selected{border-color:var(--accent);background:rgba(0,163,255,.08)}
+.cat-name{font-size:12px;color:var(--text);font-weight:500}
+.cat-meta{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:2px;display:flex;gap:8px}
+.cat-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:9px;padding:1px 6px;border-radius:3px;background:var(--bg3);border:1px solid var(--border2);color:var(--text3)}
+.model-grid{padding:10px 14px;display:flex;flex-direction:column;gap:4px}
+.model-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;transition:all .15s;border:1px solid transparent}
+.model-row:hover{background:var(--bg2);border-color:var(--border)}
+.model-row.active-model{background:rgba(0,163,255,.08);border-color:rgba(0,163,255,.25)}
+.model-name{font-family:var(--mono);font-size:11px;color:var(--text);flex:1}
+.model-size{font-size:10px;color:var(--text3)}
+.model-type{font-size:9px;padding:1px 5px;border-radius:3px}
+.type-llm{background:rgba(163,113,247,.15);color:var(--purple)}
+.type-code{background:rgba(0,163,255,.12);color:var(--accent)}
+.type-embed{background:rgba(63,185,80,.1);color:var(--green)}
+.model-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.model-status.ready{background:var(--green)}
+.model-status.loading{background:var(--amber);animation:pulse 1s infinite}
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:8px 14px;font-size:11px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.search-bar{padding:8px 14px;border-bottom:1px solid var(--border2)}
+.search-input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:5px;font-size:11px;outline:none;font-family:var(--sans)}
+.search-input:focus{border-color:var(--accent)}
+.export-row{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--border2)}
+.blender-script{padding:10px 14px;font-family:var(--mono);font-size:10px;color:var(--text2);background:var(--bg);border-radius:6px;margin:0 14px 10px;line-height:1.7;white-space:pre-wrap;max-height:140px;overflow-y:auto;border:1px solid var(--border2)}
+.preview-canvas{width:100%;height:180px;background:var(--bg);border-bottom:1px solid var(--border2)}
+.kv-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:11px;border-bottom:1px solid var(--border2)}
+.kv-row:last-child{border-bottom:none}
+.kv-key{color:var(--text3)}
+.kv-val{font-family:var(--mono);color:var(--text);font-size:10px}
+.kv-val.ok{color:var(--green)}
+.kv-val.warn{color:var(--amber)}
+.op-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:10px;font-family:var(--mono);background:rgba(163,113,247,.1);border:1px solid rgba(163,113,247,.2);color:var(--purple);margin:2px}
+.hint{font-size:10px;color:var(--text3);font-style:italic;padding:4px 14px 8px}
+</style>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="logo">M3D<span>engineering os v2</span></div>
+    <div class="nav-section">
+      <div class="nav-label">workspace</div>
+      <div class="nav-item active" onclick="setTab('chat')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 2h12v8H8l-3 2V10H1V2z" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></div>
+        AI Studio
+      </div>
+      <div class="nav-item" onclick="setTab('models')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg></div>
+        Ollama Models
+      </div>
+      <div class="nav-item" onclick="setTab('catalogue')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M4 5h6M4 7h4M4 9h5" stroke="currentColor" stroke-width="1"/></svg></div>
+        STL Catalogue
+      </div>
+      <div class="nav-item" onclick="setTab('blender')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><polygon points="7,1 13,11 1,11" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="7" cy="9" r="1.5" fill="currentColor"/></svg></div>
+        Blender Engine
+      </div>
+      <div class="nav-item" onclick="setTab('schema')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3h10M2 7h10M2 11h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+        Scene Schema
+      </div>
+      <div class="nav-item" onclick="setTab('github')">
+        <div class="nav-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1C3.7 1 1 3.7 1 7c0 2.7 1.7 4.9 4.1 5.7.3.1.4-.1.4-.3v-1c-1.7.4-2-.8-2-.8-.3-.7-.7-.9-.7-.9-.6-.4 0-.4 0-.4.6 0 1 .6 1 .6.6 1 1.5.7 1.9.5.1-.4.2-.7.4-.8-1.4-.2-2.8-.7-2.8-3 0-.7.2-1.2.6-1.7-.1-.1-.3-.7 0-1.5 0 0 .5-.2 1.7.6.5-.1 1-.2 1.5-.2s1 .1 1.5.2c1.2-.8 1.7-.6 1.7-.6.3.8.1 1.4 0 1.5.4.4.6 1 .6 1.7 0 2.3-1.4 2.8-2.8 3 .2.2.4.6.4 1.2v1.8c0 .2.1.4.4.3C11.3 11.9 13 9.7 13 7c0-3.3-2.7-6-6-6z" fill="currentColor"/></svg></div>
+        GitHub Sync
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-row ok" id="ollama-status"><span class="status-dot"></span>Ollama connected</div>
+      <div class="status-row warn" id="blender-status"><span class="status-dot"></span>Blender ready</div>
+      <div class="status-row ok" id="github-status"><span class="status-dot"></span>GitHub synced</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3)">ws://localhost:11434</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="tb-badge">MCP v1.0</span>
+      <span style="font-size:11px;color:var(--text3)">|</span>
+      <span style="font-size:11px;color:var(--text2)">Scene Plan Schema 1.0</span>
+      <span style="font-size:11px;color:var(--text3)">|</span>
+      <span style="font-size:11px;color:var(--text3)" id="job-counter">0 jobs</span>
+      <div class="tb-model">
+        <span style="font-size:10px;color:var(--text3)">model</span>
+        <select id="model-select" onchange="setModel(this.value)">
+          <option value="llama3.2:3b">llama3.2:3b</option>
+          <option value="llama3.1:8b">llama3.1:8b</option>
+          <option value="mistral:7b">mistral:7b</option>
+          <option value="codellama:13b">codellama:13b</option>
+          <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+          <option value="qwen2.5:7b">qwen2.5:7b</option>
+          <option value="gemma2:9b">gemma2:9b</option>
+          <option value="phi3:mini">phi3:mini</option>
+        </select>
+        <span style="font-size:10px;color:var(--text3)">temp 0.1</span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="chat-panel" id="panel-chat">
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg ai"><div class="msg-label">mucho3d v2</div>AI Studio online. Connected to Ollama (llama3.2:3b) and Blender worker. Type a 3D modeling command or load an STL from the catalogue. Pipeline: Chat → Intent → Plan → Validate → Execute → Export.</div>
+        </div>
+        <div class="chat-input-area">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn sm" onclick="quickPrompt('Create a low-poly chair with rounded edges')">low-poly chair</button>
+            <button class="btn sm" onclick="quickPrompt('Boolean union two cubes and bevel the edges')">boolean union</button>
+            <button class="btn sm" onclick="quickPrompt('Generate a parametric gear with 24 teeth')">parametric gear</button>
+            <button class="btn sm" onclick="quickPrompt('Make the last object taller by 50%')">revise: taller</button>
+            <button class="btn sm" onclick="quickPrompt('Apply metallic material preset to selected object')">metal material</button>
+            <button class="btn sm" onclick="quickPrompt('Export current scene as GLB and FBX')">export GLB+FBX</button>
+          </div>
+          <div class="chat-input-row">
+            <textarea class="chat-input" id="chat-input" rows="1" placeholder="3D command or natural language — e.g. 'Create a voronoi lamp shade 200mm diameter'..." onkeydown="handleKey(event)"></textarea>
+            <button class="btn primary" onclick="sendMsg()">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-models" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)">
+        <div class="section-head">Available Ollama models</div>
+        <div class="search-bar"><input class="search-input" placeholder="Filter models..." oninput="filterModels(this.value)"></div>
+        <div class="model-grid panel" id="model-list">
+        </div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border2);display:flex;gap:8px">
+          <button class="btn sm" onclick="pullModel()">Pull new model</button>
+          <button class="btn sm success" onclick="refreshModels()">Refresh list</button>
+        </div>
+      </div>
+
+      <div id="panel-catalogue" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)">
+        <div class="section-head">STL catalogue — github.com/mucho3d/models</div>
+        <div class="search-bar"><input class="search-input" id="cat-search" placeholder="Filter by name, tag, category..." oninput="filterCatalogue(this.value)"></div>
+        <div class="catalogue-grid panel" id="catalogue-list"></div>
+      </div>
+
+      <div id="panel-blender" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)">
+        <div class="section-head">Blender execution engine</div>
+        <div class="tabs">
+          <div class="tab active" onclick="blenderTab(this,'btab-ops')">Whitelisted ops</div>
+          <div class="tab" onclick="blenderTab(this,'btab-script')">Script preview</div>
+          <div class="tab" onclick="blenderTab(this,'btab-jobs')">Job queue</div>
+        </div>
+        <div id="btab-ops" class="panel" style="padding:12px 14px">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Deterministic operations only. No arbitrary Python execution from model output.</div>
+          <div id="op-chips"></div>
+        </div>
+        <div id="btab-script" style="display:none" class="panel">
+          <div style="padding:10px 14px">
+            <select id="op-select" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px;border-radius:5px;font-size:11px;font-family:var(--mono)" onchange="showScript(this.value)">
+              <option value="create_primitive">create_primitive</option>
+              <option value="boolean_union">boolean_union</option>
+              <option value="apply_material_preset">apply_material_preset</option>
+              <option value="export_glb">export_glb</option>
+            </select>
+          </div>
+          <div class="blender-script" id="script-display"></div>
+          <div style="padding:0 14px 10px;font-size:10px;color:var(--text3)">Template — parameters injected from validated Scene Plan JSON</div>
+        </div>
+        <div id="btab-jobs" style="display:none" class="panel">
+          <div class="pipeline-steps" id="job-queue"></div>
+        </div>
+      </div>
+
+      <div id="panel-schema" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)">
+        <div class="section-head">Scene Plan JSON schema v1.0</div>
+        <div class="plan-json" style="max-height:none;flex:1;margin:0;border-radius:0;border:none;border-bottom:1px solid var(--border2)">
+{
+  "schema_version": "1.0",
+  "scene_units": "meters",
+  "objects": [
+    {
+      "id": "string — unique object ID",
+      "type": "primitive | parametric_asset",
+      "operation": "whitelisted_op_name",
+      "params": {
+        "primitive": "cube | sphere | cylinder | cone | torus",
+        "size": "number (meters, max 100)",
+        "location": "[x, y, z]",
+        "rotation": "[rx, ry, rz] (degrees)"
+      }
+    }
+  ],
+  "operations": [
+    {
+      "type": "bevel | mirror | boolean_union | boolean_difference | subdivide | decimate | array_modifier | solidify | smooth_shading | set_transform | set_dimensions",
+      "target": "object_id",
+      "params": { "...": "op-specific params" }
+    }
+  ],
+  "materials": [
+    {
+      "id": "string",
+      "preset": "matte_plastic | metallic | glass | emissive | ceramic | rubber | wood | concrete",
+      "target": "object_id",
+      "color": "#hexcode (optional)"
+    }
+  ],
+  "exports": {
+    "glb": true,
+    "fbx": true,
+    "preview_png": true,
+    "metadata_json": true,
+    "output_dir": "/exports"
+  },
+  "metadata": {
+    "prompt": "original user prompt",
+    "model": "ollama model used",
+    "timestamp": "ISO8601",
+    "revision": 0,
+    "temperature": 0.1
+  }
+}</div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border2)">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Validation rules</div>
+          <div class="kv-row"><span class="kv-key">Max dimension</span><span class="kv-val">100m per axis</span></div>
+          <div class="kv-row"><span class="kv-key">Max polycount</span><span class="kv-val">500k triangles</span></div>
+          <div class="kv-row"><span class="kv-key">Free-form fields</span><span class="kv-val warn">NOT ALLOWED</span></div>
+          <div class="kv-row"><span class="kv-key">Shell execution</span><span class="kv-val warn">BLOCKED</span></div>
+          <div class="kv-row"><span class="kv-key">Dynamic Python</span><span class="kv-val warn">BLOCKED</span></div>
+          <div class="kv-row"><span class="kv-key">Auto-repair on fail</span><span class="kv-val ok">ENABLED</span></div>
+        </div>
+      </div>
+
+      <div id="panel-github" style="display:none;flex:1;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)">
+        <div class="section-head">GitHub connector — mucho3d/models</div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+            <div class="kv-row"><span class="kv-key">Repository</span><span class="kv-val ok">github.com/mucho3d/models</span></div>
+            <div class="kv-row"><span class="kv-key">Branch</span><span class="kv-val">main</span></div>
+            <div class="kv-row"><span class="kv-key">Last sync</span><span class="kv-val ok">2 min ago</span></div>
+            <div class="kv-row"><span class="kv-key">Total STL files</span><span class="kv-val">8 models</span></div>
+            <div class="kv-row"><span class="kv-key">Total size</span><span class="kv-val">16.0 MB</span></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm success" onclick="syncGithub()">Sync now</button>
+            <button class="btn sm" onclick="openRepo()">Open repo</button>
+            <button class="btn sm" onclick="configGithub()">Configure token</button>
+          </div>
+          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Recent commits</div>
+            <div id="commit-log" style="font-family:var(--mono);font-size:10px;color:var(--text3);display:flex;flex-direction:column;gap:4px"></div>
+          </div>
+          <div style="background:rgba(0,163,255,.06);border:1px solid rgba(0,163,255,.2);border-radius:6px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--accent);margin-bottom:4px">Sync settings</div>
+            <div style="font-size:11px;color:var(--text2)">STL files committed to the repo automatically appear in the STL Catalogue tab. Configure the GITHUB_TOKEN env variable on the orchestrator to enable push operations from Blender exports.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <canvas class="preview-canvas" id="preview-canvas"></canvas>
+        <div class="tabs" style="border-top:1px solid var(--border)">
+          <div class="tab active" onclick="rightTab(this,'rtab-pipe')">Pipeline</div>
+          <div class="tab" onclick="rightTab(this,'rtab-plan')">Plan JSON</div>
+          <div class="tab" onclick="rightTab(this,'rtab-log')">Logs</div>
+          <div class="tab" onclick="rightTab(this,'rtab-info')">Asset info</div>
+        </div>
+        <div id="rtab-pipe" style="flex:1;overflow-y:auto" class="panel">
+          <div class="pipeline-steps" id="pipeline-display">
+            <div class="hint">Run a command to see pipeline execution</div>
+          </div>
+        </div>
+        <div id="rtab-plan" style="display:none;flex:1;overflow:auto" class="panel">
+          <div class="plan-json" id="plan-display" style="max-height:none;margin:0;border:none;border-radius:0;background:transparent">No plan generated yet.</div>
+        </div>
+        <div id="rtab-log" style="display:none;flex:1;overflow:auto" class="panel">
+          <div class="pipeline-steps" id="log-display">
+            <div class="hint">Execution logs appear here</div>
+          </div>
+        </div>
+        <div id="rtab-info" style="display:none;flex:1;overflow:auto" class="panel">
+          <div style="padding:10px 14px" id="asset-info"><div class="hint">Select an STL or run a job to see asset info</div></div>
+        </div>
+        <div class="export-row" id="export-row" style="display:none">
+          <button class="btn sm success" onclick="downloadGLB()">GLB</button>
+          <button class="btn sm" onclick="downloadFBX()">FBX</button>
+          <button class="btn sm" onclick="downloadSTL()">STL</button>
+          <button class="btn sm" onclick="downloadMeta()">metadata.json</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MODELS=[
+  {name:"llama3.2:3b",size:"2.0 GB",type:"LLM",status:"ready"},
+  {name:"llama3.1:8b",size:"4.7 GB",type:"LLM",status:"ready"},
+  {name:"mistral:7b",size:"4.1 GB",type:"LLM",status:"ready"},
+  {name:"codellama:13b",size:"7.4 GB",type:"Code",status:"ready"},
+  {name:"deepseek-coder:6.7b",size:"3.8 GB",type:"Code",status:"ready"},
+  {name:"phi3:mini",size:"2.3 GB",type:"LLM",status:"loading"},
+  {name:"qwen2.5:7b",size:"4.4 GB",type:"LLM",status:"ready"},
+  {name:"gemma2:9b",size:"5.5 GB",type:"LLM",status:"ready"},
+  {name:"nomic-embed-text",size:"274 MB",type:"Embed",status:"ready"},
+];
+
+const CATALOGUE=[
+  {id:"stl-001",name:"Voronoi Lamp Shade",file:"voronoi_lamp.stl",size:"2.4 MB",tris:"148k",cat:"Lighting",sha:"a4f3e2b",date:"2025-01-14",tags:["organic","parametric"]},
+  {id:"stl-002",name:"Ergonomic Chair Base",file:"chair_base_v3.stl",size:"1.8 MB",tris:"92k",cat:"Furniture",sha:"c9d1a7f",date:"2025-01-10",tags:["furniture","printable"]},
+  {id:"stl-003",name:"Planetary Gear Set",file:"planetary_gears.stl",size:"3.1 MB",tris:"204k",cat:"Mechanical",sha:"e2f8b3c",date:"2025-01-08",tags:["gears","mechanism"]},
+  {id:"stl-004",name:"Cable Mgmt Clip 12mm",file:"cable_clip_12.stl",size:"0.2 MB",tris:"8k",cat:"Utility",sha:"b7a2d9e",date:"2025-01-06",tags:["utility","cable"]},
+  {id:"stl-005",name:"Modular Shelf Bracket",file:"shelf_bracket.stl",size:"0.9 MB",tris:"44k",cat:"Storage",sha:"f1c4e8a",date:"2025-01-03",tags:["shelf","modular"]},
+  {id:"stl-006",name:"RC Car Chassis V2",file:"rc_chassis_v2.stl",size:"5.7 MB",tris:"312k",cat:"RC / Hobby",sha:"d3b6f2c",date:"2024-12-28",tags:["rc","car","hobby"]},
+  {id:"stl-007",name:"Parametric Enclosure",file:"enclosure_100x60.stl",size:"1.2 MB",tris:"56k",cat:"Electronics",sha:"9a7e1b4",date:"2024-12-22",tags:["enclosure","electronics"]},
+  {id:"stl-008",name:"Low-Poly Terrain Tile",file:"terrain_tile.stl",size:"0.7 MB",tris:"28k",cat:"Terrain",sha:"2c5f8d1",date:"2024-12-18",tags:["terrain","lowpoly"]},
+];
+
+const OPS=["create_primitive","create_parametric_asset","apply_material_preset","boolean_union","boolean_difference","mirror","bevel","subdivide","export_glb","export_fbx","set_transform","set_dimensions","array_modifier","solidify","decimate","smooth_shading"];
+
+const SCRIPTS={
+  create_primitive:`import bpy\n# Whitelisted: create_primitive\nbpy.ops.mesh.primitive_cube_add(\n  size=1.0,\n  location=(0, 0, 0)\n)\nobj = bpy.context.active_object\nobj.name = "obj_001"`,
+  boolean_union:`import bpy\n# Whitelisted: boolean_union\nobj_a = bpy.data.objects["obj_001"]\nobj_b = bpy.data.objects["obj_002"]\nmod = obj_a.modifiers.new("Bool","BOOLEAN")\nmod.operation = "UNION"\nmod.object = obj_b\nbpy.ops.object.modifier_apply(modifier="Bool")`,
+  apply_material_preset:`import bpy\n# Whitelisted: apply_material_preset\nobj = bpy.data.objects["obj_001"]\nmat = bpy.data.materials.new(name="matte_plastic")\nmat.use_nodes = True\nbsdf = mat.node_tree.nodes["Principled BSDF"]\nbsdf.inputs["Base Color"].default_value = (0.16, 0.43, 0.71, 1)\nbsdf.inputs["Roughness"].default_value = 0.8\nobj.data.materials.append(mat)`,
+  export_glb:`import bpy\n# Whitelisted: export_glb\nbpy.ops.export_scene.gltf(\n  filepath="/exports/model.glb",\n  export_format="GLB",\n  export_apply=True,\n  export_materials="EXPORT"\n)`,
+};
+
+const COMMITS=[
+  {sha:"a4f3e2b",msg:"add voronoi_lamp.stl — 148k tris",date:"14 Jan"},
+  {sha:"c9d1a7f",msg:"update chair_base_v3 ergonomic revision",date:"10 Jan"},
+  {sha:"e2f8b3c",msg:"add planetary_gears parametric set",date:"8 Jan"},
+  {sha:"b7a2d9e",msg:"utility: cable_clip_12mm printable",date:"6 Jan"},
+];
+
+const PIPE_STEPS=[
+  {id:"intent",label:"Parsing intent via Ollama"},
+  {id:"plan",label:"Generating Scene Plan JSON"},
+  {id:"validate",label:"Validating schema + safety rules"},
+  {id:"execute",label:"Sending to Blender worker"},
+  {id:"render",label:"Rendering preview"},
+  {id:"export",label:"Exporting GLB + FBX + metadata"},
+  {id:"done",label:"Job complete"},
+];
+
+const DELAYS=[700,1000,500,900,1200,600,300];
+
+let state={
+  activePanel:"chat",activeRightTab:"rtab-pipe",activeBlenderTab:"btab-ops",
+  currentModel:"llama3.2:3b",jobCount:0,pipelineActive:false,
+  selectedCatItem:null,currentPlan:null,allLogs:[],
+  animFrame:null,previewAngle:0,previewHasModel:false
+};
+
+function setTab(t){
+  state.activePanel=t;
+  ["chat","models","catalogue","blender","schema","github"].forEach(p=>{
+    const el=document.getElementById("panel-"+p);
+    if(el) el.style.display=p===t?"flex":"none";
+  });
+  document.querySelectorAll(".nav-item").forEach(n=>{
+    n.classList.toggle("active",n.getAttribute("onclick")&&n.getAttribute("onclick").includes("'"+t+"'"));
+  });
+  if(t==="models") renderModels(MODELS);
+  if(t==="catalogue") renderCatalogue(CATALOGUE);
+  if(t==="blender") renderOps();
+  if(t==="github") renderCommits();
+}
+
+function rightTab(el,id){
+  document.querySelectorAll(".right-panel .tab").forEach(t=>t.classList.remove("active"));
+  el.classList.add("active");
+  ["rtab-pipe","rtab-plan","rtab-log","rtab-info"].forEach(r=>{
+    const e=document.getElementById(r);
+    if(e) e.style.display=r===id?"block":"none";
+  });
+  state.activeRightTab=id;
+}
+
+function blenderTab(el,id){
+  document.querySelectorAll(".tabs .tab").forEach(t=>t.classList.remove("active"));
+  el.classList.add("active");
+  ["btab-ops","btab-script","btab-jobs"].forEach(r=>{
+    const e=document.getElementById(r);
+    if(e) e.style.display=r===id?"block":"none";
+  });
+  if(id==="btab-script") showScript("create_primitive");
+}
+
+function setModel(v){state.currentModel=v;}
+
+function renderModels(models){
+  const c=document.getElementById("model-list");
+  if(!c) return;
+  c.innerHTML=models.map(m=>`
+    <div class="model-row ${m.name===state.currentModel?"active-model":""}" onclick="selectModel('${m.name}')">
+      <div class="model-status ${m.status}"></div>
+      <div class="model-name">${m.name}</div>
+      <div class="model-type type-${m.type.toLowerCase()}">${m.type}</div>
+      <div class="model-size">${m.size}</div>
+    </div>`).join("");
+}
+
+function selectModel(name){
+  state.currentModel=name;
+  document.getElementById("model-select").value=name;
+  renderModels(MODELS);
+  addLog("Model switched to "+name,"info");
+}
+
+function filterModels(q){
+  const f=MODELS.filter(m=>m.name.includes(q.toLowerCase())||m.type.toLowerCase().includes(q.toLowerCase()));
+  renderModels(f);
+}
+
+function renderCatalogue(items){
+  const c=document.getElementById("catalogue-list");
+  if(!c) return;
+  c.innerHTML=items.map(item=>`
+    <div class="cat-item ${state.selectedCatItem===item.id?"selected":""}" onclick="selectCatItem('${item.id}')">
+      <div class="cat-name">${item.name}</div>
+      <div class="cat-meta"><span>${item.file}</span><span>${item.size}</span><span>${item.tris} tris</span><span>${item.date}</span></div>
+      <div class="cat-tags">${item.tags.map(t=>`<span class="tag">${t}</span>`).join("")}<span class="tag">${item.cat}</span></div>
+    </div>`).join("");
+}
+
+function filterCatalogue(q){
+  const f=CATALOGUE.filter(i=>i.name.toLowerCase().includes(q.toLowerCase())||i.tags.some(t=>t.includes(q.toLowerCase()))||i.cat.toLowerCase().includes(q.toLowerCase()));
+  renderCatalogue(f);
+}
+
+function selectCatItem(id){
+  state.selectedCatItem=id;
+  const item=CATALOGUE.find(i=>i.id===id);
+  if(!item) return;
+  renderCatalogue(CATALOGUE);
+  const info=document.getElementById("asset-info");
+  if(info) info.innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div class="kv-row"><span class="kv-key">Name</span><span class="kv-val">${item.name}</span></div>
+      <div class="kv-row"><span class="kv-key">File</span><span class="kv-val">${item.file}</span></div>
+      <div class="kv-row"><span class="kv-key">Size</span><span class="kv-val">${item.size}</span></div>
+      <div class="kv-row"><span class="kv-key">Triangles</span><span class="kv-val">${item.tris}</span></div>
+      <div class="kv-row"><span class="kv-key">Category</span><span class="kv-val">${item.cat}</span></div>
+      <div class="kv-row"><span class="kv-key">Commit</span><span class="kv-val">${item.sha}</span></div>
+      <div class="kv-row"><span class="kv-key">Date</span><span class="kv-val">${item.date}</span></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:6px">
+      <button class="btn sm success" onclick="loadIntoBlender('${item.id}')">Load in Blender</button>
+      <button class="btn sm" onclick="downloadCatSTL('${item.id}')">Download STL</button>
+    </div>`;
+  rightTab(document.querySelector(".right-panel .tab:last-child"),"rtab-info");
+}
+
+function renderOps(){
+  const c=document.getElementById("op-chips");
+  if(c) c.innerHTML=OPS.map(op=>`<span class="op-chip">${op}</span>`).join("");
+}
+
+function showScript(op){
+  const d=document.getElementById("script-display");
+  if(d) d.textContent=SCRIPTS[op]||"# no template for this operation";
+}
+
+function renderCommits(){
+  const c=document.getElementById("commit-log");
+  if(c) c.innerHTML=COMMITS.map(cm=>`
+    <div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border2)">
+      <span style="color:var(--accent)">${cm.sha}</span>
+      <span style="flex:1">${cm.msg}</span>
+      <span>${cm.date}</span>
+    </div>`).join("");
+}
+
+function addMsg(role,text){
+  const c=document.getElementById("chat-msgs");
+  const d=document.createElement("div");
+  d.className="msg "+role;
+  if(role==="ai") d.innerHTML=`<div class="msg-label">mucho3d ai</div>${text}`;
+  else if(role==="sys") d.innerHTML=`<div class="msg-label">system</div>${text}`;
+  else d.textContent=text;
+  c.appendChild(d);
+  c.scrollTop=c.scrollHeight;
+}
+
+function addLog(text,type){
+  const entry={text,type,time:new Date().toISOString().slice(11,19)};
+  state.allLogs.push(entry);
+  const c=document.getElementById("log-display");
+  if(c){
+    const d=document.createElement("div");
+    d.className="pipe-step done";
+    d.style.color=type==="error"?"var(--red)":type==="info"?"var(--accent)":"var(--text2)";
+    d.innerHTML=`<span class="pipe-icon">›</span><span>[${entry.time}] ${text}</span>`;
+    c.appendChild(d);
+  }
+}
+
+function updatePipelineUI(steps){
+  const c=document.getElementById("pipeline-display");
+  if(!c) return;
+  c.innerHTML=steps.map(s=>`
+    <div class="pipe-step ${s.state}">
+      <span class="pipe-icon">${s.state==="done"?"✓":s.state==="active"?"▶":s.state==="err"?"✗":"○"}</span>
+      <span>${s.label}</span>
+    </div>`).join("");
+}
+
+function generatePlan(prompt){
+  return JSON.stringify({
+    schema_version:"1.0",scene_units:"meters",
+    objects:[{id:"obj_001",type:"primitive",operation:"create_primitive",params:{primitive:"cube",size:1,location:[0,0,0]}},{id:"obj_002",type:"primitive",operation:"bevel",params:{target:"obj_001",width:0.05,segments:3}}],
+    operations:[{type:"apply_material_preset",target:"obj_001",params:{preset:"matte_plastic",color:"#2a6db5"}},{type:"smooth_shading",target:"obj_001",params:{}}],
+    materials:[{id:"mat_001",preset:"matte_plastic",target:"obj_001"}],
+    exports:{glb:true,fbx:true,preview_png:true,metadata_json:true,output_dir:"/exports"},
+    metadata:{prompt,model:state.currentModel,timestamp:new Date().toISOString(),revision:state.jobCount,temperature:0.1}
+  },null,2);
+}
+
+function runPipeline(prompt){
+  if(state.pipelineActive) return;
+  state.pipelineActive=true;
+  state.jobCount++;
+  document.getElementById("job-counter").textContent=state.jobCount+" job"+(state.jobCount>1?"s":"");
+  const steps=PIPE_STEPS.map(s=>({...s,state:"wait"}));
+  let cur=0;
+  addLog("Job #"+state.jobCount+" started — "+prompt.slice(0,60),"info");
+  function tick(){
+    if(cur>=steps.length){state.pipelineActive=false;return;}
+    steps[cur].state="active";
+    updatePipelineUI(steps);
+    addLog(steps[cur].label,"ok");
+    setTimeout(()=>{
+      steps[cur].state="done";
+      if(cur===1){
+        const plan=generatePlan(prompt);
+        state.currentPlan=plan;
+        const pd=document.getElementById("plan-display");
+        if(pd) pd.textContent=plan;
+      }
+      if(cur===steps.length-1){
+        document.getElementById("export-row").style.display="flex";
+        state.previewHasModel=true;
+        addMsg("ai","Job complete. Scene generated from: <em>"+prompt.slice(0,80)+"</em><br>Exports ready: model.glb · model.fbx · preview.png · metadata.json");
+      }
+      cur++;
+      setTimeout(tick,DELAYS[cur-1]||300);
+    },DELAYS[cur]);
+  }
+  tick();
+}
+
+function sendMsg(){
+  const inp=document.getElementById("chat-input");
+  const msg=inp.value.trim();
+  if(!msg) return;
+  addMsg("user",msg);
+  inp.value="";
+  addMsg("sys","→ Ollama ("+state.currentModel+") · MCP pipeline starting · temp 0.1");
+  setTimeout(()=>runPipeline(msg),300);
+}
+
+function quickPrompt(p){
+  setTab("chat");
+  document.getElementById("chat-input").value=p;
+  setTimeout(sendMsg,100);
+}
+
+function handleKey(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}
+
+function pullModel(){
+  const name=prompt("Enter Ollama model name (e.g. llava:7b):");
+  if(name&&name.trim()) addLog("Pulling model: "+name.trim()+" — run: ollama pull "+name.trim(),"info");
+}
+
+function refreshModels(){addLog("Refreshed model list from Ollama API","info");}
+
+function syncGithub(){
+  addLog("GitHub sync started — fetching mucho3d/models","info");
+  setTimeout(()=>addLog("GitHub sync complete — 8 STL files indexed","ok"),1200);
+}
+
+function openRepo(){addLog("Opening github.com/mucho3d/models","info");}
+function configGithub(){addLog("Set GITHUB_TOKEN in .env.local on the orchestrator service","info");}
+function loadIntoBlender(id){
+  const item=CATALOGUE.find(i=>i.id===id);
+  if(!item) return;
+  setTab("chat");
+  addMsg("sys","Loading "+item.file+" from GitHub into Blender worker...");
+  setTimeout(()=>runPipeline("Load and display "+item.name+" from STL catalogue"),400);
+}
+function downloadCatSTL(id){const item=CATALOGUE.find(i=>i.id===id);if(item) addLog("Download: "+item.file+" ("+item.size+")","info");}
+function downloadGLB(){addLog("Downloading model.glb — "+Math.round(Math.random()*3+1)+"."+Math.round(Math.random()*9)+" MB","info");}
+function downloadFBX(){addLog("Downloading model.fbx","info");}
+function downloadSTL(){addLog("Downloading model.stl","info");}
+function downloadMeta(){addLog("Downloading metadata.json","info");}
+
+function drawPreview(){
+  const canvas=document.getElementById("preview-canvas");
+  if(!canvas) return;
+  const ctx=canvas.getContext("2d");
+  const W=canvas.width=canvas.offsetWidth||340;
+  const H=canvas.height=180;
+  ctx.fillStyle="#050505";
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(0,163,255,0.05)";
+  ctx.lineWidth=1;
+  for(let i=0;i<W;i+=20){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+  for(let i=0;i<H;i+=20){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
+  if(state.previewHasModel){
+    state.previewAngle+=0.015;
+    const a=state.previewAngle,cx=W/2,cy=H/2+5,s=55;
+    const cos=Math.cos(a),sin=Math.sin(a);
+    const pts=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]];
+    function proj([x,y,z]){
+      const rx=x*cos-z*sin,rz=x*sin+z*cos;
+      const ry=y*Math.cos(0.45)-rz*Math.sin(0.45),rz2=y*Math.sin(0.45)+rz*Math.cos(0.45);
+      const d=5/(5+rz2);
+      return[cx+rx*d*s,cy-ry*d*s];
+    }
+    const p=pts.map(proj);
+    const faces=[[0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]];
+    const norms=[[0,0,-1],[0,0,1],[0,-1,0],[0,1,0],[1,0,0],[-1,0,0]];
+    const L=[0.5,0.8,0.6];
+    faces.forEach((f,i)=>{
+      const n=norms[i],dot=Math.max(0.1,n[0]*L[0]+n[1]*L[1]+n[2]*L[2]);
+      ctx.beginPath();
+      f.forEach((vi,j)=>{j===0?ctx.moveTo(...p[vi]):ctx.lineTo(...p[vi]);});
+      ctx.closePath();
+      const b=Math.floor(dot*200);
+      ctx.fillStyle=`rgba(0,${Math.floor(dot*140)},${b},0.9)`;
+      ctx.fill();
+      ctx.strokeStyle="rgba(0,163,255,0.35)";ctx.lineWidth=0.5;ctx.stroke();
+    });
+    ctx.fillStyle="rgba(0,163,255,0.6)";ctx.font="10px JetBrains Mono,monospace";
+    ctx.fillText("preview  ·  obj_001  ·  cube  ·  matte_plastic",10,H-10);
+  } else if(state.pipelineActive){
+    ctx.strokeStyle="rgba(0,163,255,0.3)";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    const t=Date.now()*0.001;
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(W/2,H/2,20+i*16,t+i,t+i+2.2);ctx.stroke();}
+    ctx.setLineDash([]);
+    ctx.fillStyle="rgba(0,163,255,0.5)";ctx.font="10px monospace";ctx.textAlign="center";
+    ctx.fillText("executing...",W/2,H/2+48);ctx.textAlign="left";
+  } else {
+    ctx.fillStyle="rgba(0,163,255,0.12)";ctx.font="11px monospace";ctx.textAlign="center";
+    ctx.fillText("3D PREVIEW",W/2,H/2-6);ctx.fillStyle="rgba(0,163,255,0.06)";
+    ctx.fillText("run a command to render",W/2,H/2+12);ctx.textAlign="left";
+  }
+  state.animFrame=requestAnimationFrame(drawPreview);
+}
+
+setTab("chat");
+renderOps();
+drawPreview();
+renderCommits();
+</script>

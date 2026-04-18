@@ -1,26 +1,31 @@
 import { motion } from 'framer-motion'
-import { Package, ShoppingCart, Boxes } from 'lucide-react'
+import { Package, Boxes, Zap } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
 import { Scene3D, EngineeringGrid, WireframeMesh, CameraController, Lights, FloatingHUD } from '@/components/3d'
-import { BentoGrid, ProductDetail } from '@/components/shop'
 import { CommandPalette } from '@/components/ai'
 import { Panel, Badge } from '@/components/ui'
-import { useShopStore } from '@/store'
 import { staggerContainer, staggerItem } from '@/lib/animations'
 
+/**
+ * Dashboard - Project workspace cockpit
+ *
+ * Shows:
+ * - Project overview
+ * - Active generations
+ * - Recent activity
+ * - 3D preview
+ * - Quick actions
+ */
 export function Dashboard() {
-  const products = useShopStore((state) => state.getFilteredProducts())
-
   const stats = [
     { label: 'Active Projects', value: '12', icon: Package, color: 'text-blue-500' },
-    { label: 'Completed Prints', value: '248', icon: Boxes, color: 'text-green-500' },
-    { label: 'Shop Orders', value: '8', icon: ShoppingCart, color: 'text-primary' },
+    { label: 'Generated Models', value: '248', icon: Boxes, color: 'text-green-500' },
+    { label: 'Processing', value: '3', icon: Zap, color: 'text-primary' },
   ]
 
   return (
     <DashboardLayout>
       <CommandPalette />
-      <ProductDetail />
 
       <div className="space-y-6">
         {/* Welcome Header */}
@@ -32,7 +37,7 @@ export function Dashboard() {
             Welcome to <span className="text-primary">Mucho3D</span>
           </h1>
           <p className="text-white/60">
-            Your engineering workspace for 3D printing and design
+            AI-assisted 3D generation workspace
           </p>
         </motion.div>
 
@@ -73,7 +78,7 @@ export function Dashboard() {
           >
             <Panel
               title="3D Studio Preview"
-              description="Interactive 3D scene with engineering grid"
+              description="Interactive 3D workspace"
               headerAction={
                 <Badge variant="success">
                   <span className="status-online mr-2" />
@@ -106,15 +111,15 @@ export function Dashboard() {
               <div className="space-y-3">
                 <button className="w-full px-4 py-3 text-left rounded-lg glass-panel hover:bg-surface-bright transition-colors">
                   <div className="font-medium text-white">New Project</div>
-                  <div className="text-xs text-white/60">Create a new 3D project</div>
+                  <div className="text-xs text-white/60">Start with a prompt</div>
                 </button>
                 <button className="w-full px-4 py-3 text-left rounded-lg glass-panel hover:bg-surface-bright transition-colors">
-                  <div className="font-medium text-white">Import Model</div>
-                  <div className="text-xs text-white/60">Upload STL or OBJ file</div>
+                  <div className="font-medium text-white">Open Studio</div>
+                  <div className="text-xs text-white/60">3D editing workspace</div>
                 </button>
                 <button className="w-full px-4 py-3 text-left rounded-lg glass-panel hover:bg-surface-bright transition-colors">
-                  <div className="font-medium text-white">Browse Shop</div>
-                  <div className="text-xs text-white/60">Get filaments & parts</div>
+                  <div className="font-medium text-white">View Projects</div>
+                  <div className="text-xs text-white/60">Your project library</div>
                 </button>
               </div>
             </Panel>
@@ -126,17 +131,17 @@ export function Dashboard() {
             >
               <div className="space-y-3">
                 <div className="text-sm">
-                  <div className="text-white/80">Model "Gear_v3.stl" completed</div>
+                  <div className="text-white/80">Generated "Modern Chair"</div>
                   <div className="text-xs text-white/40">2 hours ago</div>
                 </div>
                 <div className="divider" />
                 <div className="text-sm">
-                  <div className="text-white/80">Order #1234 shipped</div>
+                  <div className="text-white/80">Project created</div>
                   <div className="text-xs text-white/40">5 hours ago</div>
                 </div>
                 <div className="divider" />
                 <div className="text-sm">
-                  <div className="text-white/80">New filament in stock</div>
+                  <div className="text-white/80">Model exported</div>
                   <div className="text-xs text-white/40">1 day ago</div>
                 </div>
               </div>
@@ -144,20 +149,24 @@ export function Dashboard() {
           </motion.div>
         </div>
 
-        {/* Featured Products */}
+        {/* Recent Projects */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
           <Panel
-            title="Featured Products"
-            description="Popular items from our shop"
+            title="Recent Projects"
+            description="Your recent work"
           >
-            <BentoGrid products={products} maxItems={6} />
+            <div className="space-y-3 text-center py-8 text-white/60">
+              No projects yet. Create your first project to get started.
+            </div>
           </Panel>
         </motion.div>
       </div>
     </DashboardLayout>
   )
 }
+
+export default Dashboard

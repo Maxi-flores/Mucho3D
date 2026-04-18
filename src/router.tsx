@@ -1,31 +1,109 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
 import { Home } from '@/pages/Home'
-import { Dashboard } from '@/pages/Dashboard'
-import { Shop } from '@/pages/Shop'
-import { Studio } from '@/pages/Studio'
 import { NotFound } from '@/pages/NotFound'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { AuthLoadingScreen } from '@/components/loading/AuthLoadingScreen'
+
+// Lazy-loaded pages for code splitting
+const Dashboard = lazy(() => import('@/pages/app/Dashboard').then(m => ({ default: m.Dashboard })))
+const Studio = lazy(() => import('@/pages/app/Studio').then(m => ({ default: m.Studio })))
+const Projects = lazy(() => import('@/pages/app/Projects').then(m => ({ default: m.Projects })))
+const ProjectDetail = lazy(() => import('@/pages/app/ProjectDetail').then(m => ({ default: m.ProjectDetail })))
+const Settings = lazy(() => import('@/pages/app/Settings').then(m => ({ default: m.Settings })))
+const SignIn = lazy(() => import('@/pages/auth/SignIn').then(m => ({ default: m.SignIn })))
+
+const LoadingFallback = () => <AuthLoadingScreen />
 
 export const router = createBrowserRouter([
+  // Public routes
   {
     path: '/',
     element: <Home />,
   },
+
+  // Authentication routes
+  {
+    path: '/auth',
+    children: [
+      {
+        path: 'signin',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <SignIn />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'callback',
+        element: <div>Processing authentication...</div>,
+      },
+    ],
+  },
+
+  // Protected app routes
+  {
+    path: '/app',
+    element: <ProtectedRoute />,
+    children: [
+      {
+        path: 'dashboard',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Dashboard />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'studio',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Studio />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'projects',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Projects />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'projects/:projectId',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <ProjectDetail />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'settings',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Settings />
+          </Suspense>
+        ),
+      },
+    ],
+  },
+
+  // Legacy redirects (for backward compatibility, will eventually remove)
   {
     path: '/dashboard',
-    element: <Dashboard />,
-  },
-  {
-    path: '/shop',
-    element: <Shop />,
+    element: <Navigate to="/app/dashboard" replace />,
   },
   {
     path: '/studio',
-    element: <Studio />,
+    element: <Navigate to="/app/studio" replace />,
   },
   {
-    path: '/settings',
-    element: <Navigate to="/dashboard" replace />, // Placeholder
+    path: '/shop',
+    element: <Navigate to="/" replace />, // Remove webstore, go home
   },
+
+  // Health check endpoint
   {
     path: '/health',
     element: (
@@ -34,8 +112,9 @@ export const router = createBrowserRouter([
           {
             status: 'healthy',
             timestamp: new Date().toISOString(),
-            version: '2.0.0',
-            service: 'mucho3d-v2',
+            version: '3.0.0',
+            service: 'mucho3d',
+            auth: 'firebase-enabled',
           },
           null,
           2
@@ -43,6 +122,8 @@ export const router = createBrowserRouter([
       </div>
     ),
   },
+
+  // 404 fallback
   {
     path: '*',
     element: <NotFound />,

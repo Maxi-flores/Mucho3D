@@ -1,0 +1,547 @@
+# Mucho3D V2 - Architecture Documentation
+
+## Overview
+
+Mucho3D V2 is a modern web-based **Engineering OS for 3D printing and AI-powered design**. The application combines interactive 3D visualization, AI-assisted command palette, and an integrated marketplace in a single, cohesive platform.
+
+**Core Purpose:** Enable designers and engineers to work with 3D models interactively while leveraging AI assistance and accessing complementary services through an integrated shop.
+
+---
+
+## Tech Stack & Rationale
+
+### Frontend Framework
+- **React 18** - Component-based UI with hooks for state management and side effects
+- **TypeScript** - Provides type safety and excellent IDE support
+- **Vite** - Fast development server and optimized production builds
+
+### 3D Graphics
+- **Three.js** - Industry-standard WebGL renderer with extensive ecosystem
+- **React Three Fiber (R3F)** - Bridges React's declarative paradigm with Three.js
+- **@react-three/drei** - Utilities and pre-built components (e.g., OrbitControls, Grid)
+
+**Why this stack:** R3F allows 3D scenes to be managed like React components, maintaining consistency with the UI paradigm. Drei provides battle-tested helpers that accelerate development.
+
+### State Management
+- **Zustand** - Lightweight alternative to Redux/Context
+- **Zustand Persist** - Automatic localStorage sync for shops cart, UI preferences
+
+**Why Zustand:** Minimal boilerplate, works seamlessly with TypeScript, no Provider wrapping needed for basic stores.
+
+### Styling
+- **Tailwind CSS** - Utility-first approach for rapid UI development
+- **Framer Motion** - Declarative animations for smooth transitions
+- **clsx + tailwind-merge** - Safe conditional class composition
+
+### Routing
+- **React Router v6** - Client-side routing with nested routes and hooks
+
+### UI/UX Libraries
+- **Lucide React** - Consistent icon library
+- **Custom components** - Buttons, Cards, Panels, Tooltips built on Tailwind
+
+---
+
+## Directory Structure
+
+```
+src/
+├── components/              # React components (organized by domain)
+│   ├── 3d/                 # Three.js/R3F specific
+│   │   ├── Canvas.tsx      # Main R3F canvas wrapper
+│   │   ├── CameraController.tsx
+│   │   ├── EngineeringGrid.tsx
+│   │   ├── FloatingHUD.tsx # FPS/stats overlay
+│   │   ├── Lights.tsx
+│   │   └── WireframeMesh.tsx
+│   ├── ai/                 # AI command system
+│   │   ├── CommandPalette.tsx
+│   │   ├── CommandInput.tsx
+│   │   ├── CommandList.tsx
+│   │   └── ChatInterface.tsx
+│   ├── layout/             # Page structure
+│   │   ├── DashboardLayout.tsx # Main layout wrapper
+│   │   ├── Sidebar.tsx
+│   │   └── Topbar.tsx
+│   ├── shop/               # E-commerce UI
+│   │   ├── BentoGrid.tsx   # Product grid layout
+│   │   ├── ProductCard.tsx
+│   │   └── ProductDetail.tsx
+│   ├── shared/             # Reusable across domains
+│   │   └── Logo.tsx
+│   └── ui/                 # Base components
+│       ├── Button.tsx
+│       ├── Card.tsx
+│       ├── Input.tsx
+│       ├── Badge.tsx
+│       ├── Panel.tsx
+│       └── Tooltip.tsx
+├── pages/                  # Route-level components
+│   ├── Home.tsx
+│   ├── Dashboard.tsx
+│   ├── Studio.tsx
+│   ├── Shop.tsx
+│   └── NotFound.tsx
+├── store/                  # Zustand state stores
+│   ├── index.ts           # Export aggregator
+│   ├── uiStore.ts         # UI state (sidebar, modals, etc.)
+│   ├── sceneStore.ts      # 3D scene state
+│   ├── aiStore.ts         # AI command/chat state
+│   └── shopStore.ts       # Shopping cart & inventory
+├── hooks/                 # Custom React hooks
+│   ├── useKeyboardShortcuts.ts
+│   ├── use3DScene.ts
+│   ├── useMediaQuery.ts
+│   └── useLocalStorage.ts
+├── lib/                   # Utilities & constants
+│   ├── cn.ts             # Class name utility
+│   ├── animations.ts     # Framer Motion presets
+│   ├── utils.ts          # Helper functions
+│   └── constants.ts      # App constants
+├── types/                 # TypeScript type definitions
+│   └── index.ts
+├── styles/
+│   └── globals.css       # Tailwind directives & global styles
+├── App.tsx               # Root component (RouterProvider wrapper)
+├── main.tsx              # Entry point (ReactDOM.createRoot)
+└── router.tsx            # Route configuration
+
+public/
+└── assets/
+    └── grid-pattern.svg
+```
+
+---
+
+## Core Architecture Patterns
+
+### 1. **State Management Architecture**
+
+Zustand stores are organized by domain:
+
+```typescript
+// useUIStore - UI state
+{
+  sidebarOpen: boolean
+  commandPaletteOpen: boolean
+  settingsPanel: boolean
+}
+
+// useSceneStore - 3D scene state
+{
+  cameraPosition: [x, y, z]
+  gridVisible: boolean
+  wireframeMode: boolean
+}
+
+// useAIStore - AI/Command state
+{
+  messages: Array<{role, content}>
+  isLoading: boolean
+  commandHistory: string[]
+}
+
+// useShopStore - Shopping state
+{
+  cart: Product[]
+  favorites: Product[]
+  inventory: Map<productId, stock>
+}
+```
+
+Each store can be imported independently without creating a dependency tree:
+```typescript
+import { useUIStore, useSceneStore } from '@/store'
+```
+
+### 2. **Component Hierarchy**
+
+```
+App
+└── RouterProvider
+    └── Routes (Home, Dashboard, Studio, Shop, NotFound, Health)
+        └── DashboardLayout (if not Home/NotFound)
+            ├── Topbar
+            ├── Sidebar
+            ├── Main content area
+            │   ├── Canvas (3D engine, R3F)
+            │   ├── CommandPalette (modal)
+            │   └── Other route-specific components
+            └── Floating components
+                ├── FloatingHUD
+                └── Tooltips
+```
+
+### 3. **3D Scene Architecture (R3F)**
+
+The 3D scene lives in `Canvas.tsx`:
+
+```typescript
+<Canvas camera={{ position: [0, 0, 10] }}>
+  <Lights /> {/* Lighting setup */}
+  <EngineeringGrid /> {/* Grid background */}
+  <WireframeMesh /> {/* Draggable/selectable meshes */}
+  <CameraController /> {/* OrbitControls wrapper */}
+</Canvas>
+```
+
+**Data Flow:**
+1. Scene state stored in `sceneStore`
+2. R3F components read scene state via `useSceneStore()`
+3. User interactions (camera movement, mesh selection) dispatch store updates
+4. Store updates re-render affected components
+
+### 4. **AI Command System**
+
+Command palette (`Ctrl+K`) is a modal overlay:
+
+1. **Activation:** Keyboard hook detects shortcut, `useUIStore.setCommandPaletteOpen(true)`
+2. **Input:** User types in `CommandInput` → fuzzy search filters `CommandList`
+3. **Execution:** Selected command can be:
+   - Instant action (e.g., toggle sidebar)
+   - Chat mode (e.g., "describe this mesh") → routes to `ChatInterface`
+4. **State:** `useAIStore` tracks conversation, loading states, history
+
+### 5. **Shop System**
+
+Cart persistence + inventory management:
+
+1. **Display:** `BentoGrid` renders products from `shopStore.inventory`
+2. **Interaction:** `ProductCard` → detail modal (`ProductDetail`) → add to cart
+3. **Persistence:** Zustand's persist middleware auto-saves cart to localStorage
+4. **Validation:** Real-time stock checks before purchase
+
+---
+
+## Data Flow
+
+### Typical User Interaction (3D Studio)
+
+```
+User clicks on mesh
+  ↓
+WireframeMesh component detects click (THREE.Raycaster)
+  ↓
+Dispatch to sceneStore: setSelectedMesh(meshId)
+  ↓
+sceneStore notifies subscribers (FloatingHUD, CommandPalette)
+  ↓
+Re-render: Selected mesh highlights, properties appear in sidebar
+```
+
+### AI Command Execution
+
+```
+User presses Ctrl+K
+  ↓
+useKeyboardShortcuts hook detects and sets uiStore.commandPaletteOpen = true
+  ↓
+CommandPalette modal mounts, CommandInput focused
+  ↓
+User types command (e.g., "describe the selected object")
+  ↓
+CommandList filters matches, user selects one
+  ↓
+Command routes to aiStore, ChatInterface mounts
+  ↓
+Frontend sends request to API (if VITE_API_BASE_URL set)
+  ↓
+Response streamed back to ChatInterface, rendered in conversation
+```
+
+### Shopping Cart Flow
+
+```
+User navigates to /shop
+  ↓
+Shop page renders BentoGrid from shopStore.inventory
+  ↓
+User clicks "Add to Cart" on ProductCard
+  ↓
+Dispatches: useShopStore.addToCart(product)
+  ↓
+Zustand persist middleware auto-saves to localStorage
+  ↓
+useShopStore subscribers (cart badge, sidebar cart count) update
+  ↓
+Cart visible in sidebar or dedicated cart page
+```
+
+---
+
+## Key Components Deep Dive
+
+### Canvas.tsx
+Central Three.js setup. Handles:
+- Camera initialization and perspective
+- Lighting (directional, ambient)
+- Scene rendering loop
+- Passes canvas ref to other R3F components
+
+### CameraController.tsx
+Wraps R3F's OrbitControls:
+- User can rotate/pan/zoom the scene
+- Updates `sceneStore.cameraPosition` on change
+- Respects mobile viewport constraints
+
+### CommandPalette.tsx
+Modal UI that:
+- Captures keyboard input
+- Manages focus trap (accessibility)
+- Routes commands to appropriate handlers (UI actions vs. AI chat)
+- Displays command history and shortcuts
+
+### DashboardLayout.tsx
+Wrapper component that:
+- Manages responsive breakpoints
+- Renders sidebar + main content grid
+- Positions Topbar and floating overlays
+- Handles sidebar toggle logic
+
+### BentoGrid.tsx
+CSS Grid with dynamic sizing:
+- Products can span multiple grid cells
+- Responsive on mobile (stacks vertically)
+- Uses Framer Motion for stagger animations
+
+---
+
+## Routing Structure
+
+| Route | Component | Purpose |
+|-------|-----------|---------|
+| `/` | `Home.tsx` | Landing page / intro |
+| `/dashboard` | `Dashboard.tsx` | Main app hub |
+| `/studio` | `Studio.tsx` | 3D editor with Canvas + HUD |
+| `/shop` | `Shop.tsx` | Product marketplace |
+| `/settings` | Redirects to `/dashboard` | Placeholder |
+| `/health` | JSON status | Health check endpoint |
+| `/*` | `NotFound.tsx` | 404 fallback |
+
+---
+
+## State Store Interfaces
+
+### UIStore
+```typescript
+interface UIState {
+  sidebarOpen: boolean
+  commandPaletteOpen: boolean
+  settingsPanelOpen: boolean
+  toggleSidebar: () => void
+  setCommandPaletteOpen: (open: boolean) => void
+  setSettingsPanelOpen: (open: boolean) => void
+}
+```
+
+### SceneStore
+```typescript
+interface SceneState {
+  cameraPosition: [number, number, number]
+  selectedMeshId: string | null
+  gridVisible: boolean
+  wireframeMode: boolean
+  setCameraPosition: (pos: Vector3) => void
+  selectMesh: (id: string) => void
+  toggleGrid: () => void
+  toggleWireframe: () => void
+}
+```
+
+### AIStore
+```typescript
+interface AIState {
+  messages: Message[]
+  isLoading: boolean
+  commandHistory: string[]
+  addMessage: (msg: Message) => void
+  setLoading: (loading: boolean) => void
+  clearHistory: () => void
+}
+```
+
+### ShopStore
+```typescript
+interface ShopState {
+  cart: Product[]
+  inventory: Product[]
+  addToCart: (product: Product) => void
+  removeFromCart: (productId: string) => void
+  clearCart: () => void
+}
+```
+
+---
+
+## Design System
+
+### Color Palette
+- **Background:** `#050505` (near-black, high contrast)
+- **Primary:** `#00A3FF` (electric blue, accent color)
+- **Surface:** `rgba(30, 41, 59, 0.4)` with backdrop blur (glassmorphism)
+- **Text:** White (`#ffffff`) on dark backgrounds
+
+### Typography
+- **Headings:** Monospace (Geist Mono / JetBrains Mono) for technical feel
+- **Body:** System sans-serif (Inter / -apple-system) for readability
+- **Code:** Monospace, smaller size
+
+### Motion
+- **Spring animations:** Framer Motion `type: "spring"` for UI transitions
+- **Stagger effects:** Sequential animations for lists
+- **Camera easing:** Smooth interpolation for 3D camera movements
+
+### Responsive Breakpoints (Tailwind)
+- `sm`: 640px
+- `md`: 768px
+- `lg`: 1024px
+- `xl`: 1280px
+- `2xl`: 1536px
+
+Mobile-first approach: base styles for mobile, add `md:` or `lg:` for larger screens.
+
+---
+
+## Development Workflow
+
+### Adding a New Feature
+
+1. **Create store** if managing state:
+   ```typescript
+   // src/store/newFeatureStore.ts
+   export const useNewFeatureStore = create(...)
+   ```
+
+2. **Export from store index:**
+   ```typescript
+   // src/store/index.ts
+   export { useNewFeatureStore } from './newFeatureStore'
+   ```
+
+3. **Create components:**
+   ```typescript
+   // src/components/feature/NewComponent.tsx
+   import { useNewFeatureStore } from '@/store'
+   export const NewComponent = () => { ... }
+   ```
+
+4. **Add to appropriate page or layout:**
+   ```typescript
+   // src/pages/Dashboard.tsx
+   import { NewComponent } from '@/components/feature'
+   ```
+
+5. **Use hooks for side effects:**
+   ```typescript
+   import { useKeyboardShortcuts } from '@/hooks'
+   useKeyboardShortcuts({ key: 'x', callback: () => {...} })
+   ```
+
+### Type Safety
+- Always define TypeScript interfaces for store state
+- Use `as const` for string literals to avoid type widening
+- Export types from `src/types/index.ts`
+
+### Testing (Not Yet Implemented)
+- Unit tests: Vitest + React Testing Library
+- E2E tests: Playwright for critical flows
+- Performance: Lighthouse CI integration
+
+---
+
+## Performance Considerations
+
+### Bundle Size
+- **Tree-shaking:** Unused code removed by Vite
+- **Code splitting:** Route-based lazy loading (React Router)
+- **CSS:** Tailwind purges unused utility classes
+
+### 3D Rendering
+- **LOD (Level of Detail):** Complex meshes simplified for distant camera positions
+- **Frustum culling:** Three.js automatically skips off-screen objects
+- **Texture compression:** DDS/KTX formats for faster loading (future)
+- **Target:** 60 FPS on modern browsers (GPU-dependent)
+
+### State Management
+- Zustand's fine-grained subscriptions avoid unnecessary re-renders
+- Only components using specific store slices re-render on updates
+- Persist middleware is async to avoid blocking render
+
+---
+
+## Extensibility Points
+
+### Adding New Store
+1. Create `src/store/featureStore.ts`
+2. Export from `src/store/index.ts`
+3. Use in components via `useFeatureStore()`
+
+### Adding New Page
+1. Create `src/pages/NewPage.tsx`
+2. Add route to `src/router.tsx`
+3. Link from navigation components
+
+### Adding New Keyboard Shortcut
+1. Update `src/hooks/useKeyboardShortcuts.ts` to listen for key
+2. Dispatch store action on match
+3. Document in README and `KEYBOARD_SHORTCUTS` constant
+
+### Adding 3D Elements
+1. Create component in `src/components/3d/`
+2. Import and use inside `Canvas.tsx`
+3. Manage geometry/material state in `sceneStore`
+4. Handle interactions via raycasting or event handlers
+
+---
+
+## Known Limitations & Future Improvements
+
+### Current Limitations
+- AI chat disabled by default (requires backend API)
+- No user authentication system
+- No persistent database (all data in localStorage)
+- Limited 3D model format support (works with primitives only)
+
+### Planned Enhancements
+1. **Authentication:** OAuth2 / email-based login
+2. **Backend API:** Node.js/Express for AI processing, database storage
+3. **Model Import:** GLTF/GLB/OBJ file upload and parsing
+4. **Collaboration:** Real-time mesh editing (WebSocket sync)
+5. **Analytics:** Error tracking, usage metrics
+6. **PWA:** Offline support, app-like experience
+
+---
+
+## Troubleshooting
+
+### 3D Canvas Not Rendering
+- Check browser GPU support (WebGL 2)
+- Verify Three.js context creation in Canvas.tsx
+- Inspect browser console for WebGL errors
+
+### Store Not Updating Components
+- Ensure component imports from correct store export
+- Check Zustand selector is returning value that changed
+- Verify store mutation happens before render
+
+### Keyboard Shortcuts Not Working
+- Confirm hook is imported in component
+- Check event listener dependencies
+- Inspect keyboard event in browser DevTools
+
+### Styling Issues
+- Verify Tailwind config includes `src/**/*.tsx`
+- Check class name syntax (no spaces in class lists)
+- Use `clsx` for conditional classes
+
+---
+
+## References
+
+- [React Docs](https://react.dev)
+- [Three.js Docs](https://threejs.org/docs/)
+- [React Three Fiber](https://docs.pmndrs.org/react-three-fiber/)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Tailwind CSS](https://tailwindcss.com)
+- [React Router](https://reactrouter.com)
+

@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Box,
-  ShoppingCart,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -15,10 +14,9 @@ import { Tooltip } from '@/components/ui'
 import { fadeInLeft } from '@/lib/animations'
 
 const navigation = [
-  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { name: 'Studio', icon: Box, path: '/studio' },
-  { name: 'Shop', icon: ShoppingCart, path: '/shop' },
-  { name: 'Settings', icon: Settings, path: '/settings' },
+  { name: 'Dashboard', icon: LayoutDashboard, path: '/app/dashboard' },
+  { name: 'Studio', icon: Box, path: '/app/studio' },
+  { name: 'Settings', icon: Settings, path: '/app/settings' },
 ]
 
 export function Sidebar() {

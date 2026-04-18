@@ -15,19 +15,22 @@ export interface Modal {
 export interface Toast {
   id: string
   type: 'success' | 'error' | 'warning' | 'info'
-  message: string
+  title?: string
+  message?: string
+  description?: string
   duration?: number
 }
 
 // 3D Scene Types
 export interface SceneObject {
   id: string
-  type: 'mesh' | 'light' | 'camera' | 'group'
+  type: 'mesh' | 'light' | 'camera' | 'group' | 'box' | 'sphere' | 'torus' | 'cylinder' | 'cone'
   name: string
   visible: boolean
   position: [number, number, number]
   rotation: [number, number, number]
   scale: [number, number, number]
+  color?: string
 }
 
 export interface CameraState {
