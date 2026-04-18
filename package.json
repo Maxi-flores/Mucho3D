@@ -1,23 +1,47 @@
 {
-  "name": "mucho3d",
-  "version": "1.0.0",
-  "description": "Mucho3D – Next.js + Plasmic project",
-  "main": "index.js",
+  "name": "mucho3d-v2",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mucho3D V2 - Engineering OS for 3D printing and AI-powered design",
   "scripts": {
-    "dev": "NEXT_DISABLE_TURBOPACK=1 next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "Max",
-  "license": "ISC",
   "dependencies": {
-    "@plasmicapp/loader-nextjs": "^1.0.445",
-    "@plasmicapp/loader-react": "^1.0.404",
-    "@plasmicapp/react-web": "^0.2.408",
-    "next": "^16.0.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.23.1",
+    "zustand": "^4.5.2",
+    "framer-motion": "^11.2.10",
+    "lucide-react": "^0.378.0",
+    "@react-three/fiber": "^8.16.6",
+    "@react-three/drei": "^9.105.6",
+    "three": "^0.163.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.163.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "tailwindcss": "^3.4.3",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.7",
+    "@typescript-eslint/eslint-plugin": "^7.10.0",
+    "@typescript-eslint/parser": "^7.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }

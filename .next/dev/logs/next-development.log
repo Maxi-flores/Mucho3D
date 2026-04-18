@@ -1,15 +1,34 @@
-[00:00:00.963] Server  LOG      ✓ Ready in 609ms
-[00:00:03.582] Server  LOG     Subscribing to Plasmic changes...
-[00:00:03.680] Server  DEBUG   Plasmic: doing a fresh fetch...
-[00:00:04.009] Server  DEBUG   Plasmic: fetched designs for "plasmic-embed-css" (8PtdGodUbexNYgkuyBUcWu@3.33.0), "react-aria" (gmeH6XgPaBtkt51HunAo4g@18.29.0), "Mucho3D" (u9iv4MUuC4PzWABABWMHXD@latest)
-[00:00:04.082] Server  ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+[00:00:00.749] Server  LOG      ✓ Ready in 490ms
+[00:00:19.448] Server  LOG     Subscribing to Plasmic changes...
+[00:00:19.603] Server  ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
 
 npx @next/codemod@latest new-link .
 
 Learn more: https://nextjs.org/docs/app/building-your-application/upgrading/codemods#remove-a-tags-from-link-components
-[00:00:04.128] Server  WARN    Warning: data for page "/" is 212 kB which exceeds the threshold of 128 kB, this amount of data can reduce performance.
+[00:00:19.652] Server  WARN    Warning: data for page "/" is 212 kB which exceeds the threshold of 128 kB, this amount of data can reduce performance.
 See more info here: https://nextjs.org/docs/messages/large-page-data
-[00:00:04.567] Browser ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+[00:00:20.026] Browser ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+
+npx @next/codemod@latest new-link .
+
+Learn more: https://nextjs.org/docs/app/building-your-application/upgrading/codemods#remove-a-tags-from-link-components
+[00:00:37.345] Server  WARN    Warning: data for page "/" is 212 kB which exceeds the threshold of 128 kB, this amount of data can reduce performance.
+See more info here: https://nextjs.org/docs/messages/large-page-data
+[00:00:37.761] Browser ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+
+npx @next/codemod@latest new-link .
+
+Learn more: https://nextjs.org/docs/app/building-your-application/upgrading/codemods#remove-a-tags-from-link-components
+[00:00:54.064] Server  WARN    Warning: data for page "/" is 212 kB which exceeds the threshold of 128 kB, this amount of data can reduce performance.
+See more info here: https://nextjs.org/docs/messages/large-page-data
+[00:00:54.418] Browser ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
+
+npx @next/codemod@latest new-link .
+
+Learn more: https://nextjs.org/docs/app/building-your-application/upgrading/codemods#remove-a-tags-from-link-components
+[00:01:11.809] Server  WARN    Warning: data for page "/" is 212 kB which exceeds the threshold of 128 kB, this amount of data can reduce performance.
+See more info here: https://nextjs.org/docs/messages/large-page-data
+[00:01:12.044] Browser ERROR   `legacyBehavior` is deprecated and will be removed in a future release. A codemod is available to upgrade your components:
 
 npx @next/codemod@latest new-link .
 
