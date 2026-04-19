@@ -1,32 +1,66 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { Logo } from '@/components/shared/Logo'
 import { Button, Input, Card } from '@/components/ui'
+import { useAuth } from '@/hooks'
 import { fadeInUp } from '@/lib/animations'
 
-/**
- * SignIn - Authentication entry point
- *
- * Supports:
- * - Email/password (demo)
- * - Google OAuth (placeholder)
- * - Microsoft OAuth (placeholder)
- *
- * TODO: Integrate with Firebase Auth
- */
 export function SignIn() {
   const navigate = useNavigate()
+  const { signInWithEmail, signInWithGoogle, signInWithMicrosoft, error: authError } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleDemoSignIn = () => {
-    // Demo: Set auth flag in localStorage
-    // TODO: Replace with real Firebase auth
-    localStorage.setItem('mucho3d-user', JSON.stringify({
-      id: 'demo-user',
-      email: 'user@example.com',
-      name: 'Demo User',
-    }))
-    navigate('/app/dashboard')
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    try {
+      await signInWithEmail(email, password)
+      navigate('/app/dashboard')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Sign in failed'
+      setError(errorMsg)
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const handleGoogleSignIn = async () => {
+    setError(null)
+    setLoading(true)
+
+    try {
+      await signInWithGoogle()
+      navigate('/app/dashboard')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Google sign-in failed'
+      setError(errorMsg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMicrosoftSignIn = async () => {
+    setError(null)
+    setLoading(true)
+
+    try {
+      await signInWithMicrosoft()
+      navigate('/app/dashboard')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Microsoft sign-in failed'
+      setError(errorMsg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const displayError = error || authError
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
@@ -56,8 +90,15 @@ export function SignIn() {
 
         {/* Sign In Card */}
         <Card variant="glass" className="p-8 space-y-6">
+          {/* Error Message */}
+          {displayError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <p className="text-sm text-red-400">{displayError}</p>
+            </div>
+          )}
+
           {/* Email/Password Form */}
-          <form onSubmit={(e) => { e.preventDefault(); handleDemoSignIn(); }} className="space-y-4">
+          <form onSubmit={handleEmailSignIn} className="space-y-4">
             <div>
               <label className="block text-sm text-white/80 mb-2">
                 Email
@@ -66,6 +107,9 @@ export function SignIn() {
                 type="email"
                 placeholder="you@example.com"
                 className="w-full"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div>
@@ -76,10 +120,19 @@ export function SignIn() {
                 type="password"
                 placeholder="••••••••"
                 className="w-full"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
-            <Button variant="primary" size="lg" className="w-full" type="submit">
-              Sign In (Demo)
+            <Button
+              variant="primary"
+              size="lg"
+              className="w-full"
+              type="submit"
+              disabled={loading || !email || !password}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
 
@@ -93,12 +146,24 @@ export function SignIn() {
             </div>
           </div>
 
-          {/* OAuth Options (Placeholders) */}
+          {/* OAuth Options */}
           <div className="space-y-3">
-            <Button variant="secondary" size="lg" className="w-full" disabled>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
               <span className="mr-2">🔵</span> Google
             </Button>
-            <Button variant="secondary" size="lg" className="w-full" disabled>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              onClick={handleMicrosoftSignIn}
+              disabled={loading}
+            >
               <span className="mr-2">🪟</span> Microsoft
             </Button>
           </div>
@@ -106,7 +171,7 @@ export function SignIn() {
 
         {/* Footer */}
         <p className="text-center text-sm text-white/40 mt-8">
-          No account? Coming soon. Demo uses auto sign-in.
+          Firebase credentials needed for real auth. Demo mode uses localStorage.
         </p>
         <p className="text-center text-sm text-white/40 mt-2">
           <button

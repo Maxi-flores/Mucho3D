@@ -1,15 +1,26 @@
 import { motion } from 'framer-motion'
-import { Play, Pause, RotateCcw, Download, Save } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Play, Pause, RotateCcw, Download, Save, MessageSquare } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
 import { Scene3D, EngineeringGrid, WireframeMesh, CameraController, Lights, FloatingHUD, CameraTracker } from '@/components/3d'
 import { CommandPalette } from '@/components/ai'
 import { ObjectInspector, ObjectList } from '@/components/studio'
 import { Panel, Button, Badge } from '@/components/ui'
+import { GenerationChat } from '@/features/chat/GenerationChat'
 import { useSceneStore } from '@/store'
 import { useUIStore } from '@/store'
+import { useAuth } from '@/hooks'
+import { saveScene } from '@/services/firestore'
 import { fadeInUp } from '@/lib/animations'
 
 export function Studio() {
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('project')
+  const { user } = useAuth()
+  const [showChat, setShowChat] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
   const showGrid = useSceneStore((state) => state.showGrid)
   const toggleGrid = useSceneStore((state) => state.toggleGrid)
   const showWireframe = useSceneStore((state) => state.showWireframe)
@@ -21,6 +32,10 @@ export function Studio() {
   const exportAsJSON = useSceneStore((state) => state.exportAsJSON)
   const addToast = useUIStore((state) => state.addToast)
   const objects = useSceneStore((state) => state.objects)
+  const camera = useSceneStore((state) => state.camera)
+  const showWireframeValue = useSceneStore((state) => state.showWireframe)
+  const showGridValue = useSceneStore((state) => state.showGrid)
+  const ambientIntensity = useSceneStore((state) => state.ambientIntensity)
 
   const handleExport = () => {
     const json = exportAsJSON()
@@ -38,14 +53,38 @@ export function Studio() {
     })
   }
 
-  const handleSave = () => {
-    const json = exportAsJSON()
-    localStorage.setItem('mucho3d-autosave', json)
-    addToast({
-      type: 'success',
-      title: 'Scene Saved',
-      description: 'Scene saved to browser storage',
-    })
+  const handleSave = async () => {
+    if (!user || !projectId) {
+      addToast({
+        type: 'error',
+        title: 'Save Failed',
+        description: 'Missing user or project context',
+      })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await saveScene(projectId, user.id, objects, camera, {
+        showGrid: showGridValue,
+        showWireframe: showWireframeValue,
+        ambientIntensity,
+      })
+      addToast({
+        type: 'success',
+        title: 'Scene Saved',
+        description: `Saved scene with ${objects.length} object(s) to Firestore`,
+      })
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save scene'
+      addToast({
+        type: 'error',
+        title: 'Save Failed',
+        description: errorMsg,
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -65,13 +104,26 @@ export function Studio() {
               3D Studio <span className="text-primary text-xl">V3</span>
             </h1>
             <p className="text-white/60">
-              Professional 3D modeling and visualization workspace
+              {projectId ? 'AI-assisted 3D workspace' : 'Professional 3D modeling and visualization workspace'}
             </p>
           </div>
-          <Badge variant="success">
-            <span className="status-online mr-2" />
-            {objects.length} Object{objects.length !== 1 ? 's' : ''}
-          </Badge>
+          <div className="flex items-center gap-4">
+            <Badge variant="success">
+              <span className="status-online mr-2" />
+              {objects.length} Object{objects.length !== 1 ? 's' : ''}
+            </Badge>
+            {projectId && (
+              <Button
+                variant={showChat ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setShowChat(!showChat)}
+                className="flex items-center gap-2"
+              >
+                <MessageSquare size={16} />
+                {showChat ? 'Hide' : 'Chat'}
+              </Button>
+            )}
+          </div>
         </motion.div>
 
         {/* Main Studio Area */}
@@ -179,9 +231,10 @@ export function Studio() {
                     variant="primary"
                     size="sm"
                     className="w-full justify-start gap-2"
+                    disabled={isSaving || !projectId}
                   >
                     <Save size={16} />
-                    Save Project
+                    {isSaving ? 'Saving...' : 'Save to Firestore'}
                   </Button>
                   <Button
                     onClick={handleExport}
@@ -194,6 +247,13 @@ export function Studio() {
                   </Button>
                 </div>
               </Panel>
+
+              {/* Chat Panel */}
+              {projectId && showChat && (
+                <div className="h-[600px]">
+                  <GenerationChat projectId={projectId} />
+                </div>
+              )}
             </div>
           </motion.div>
         </div>

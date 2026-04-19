@@ -83,7 +83,6 @@ export const API_CONFIG = {
 export const FEATURES = {
   aiChat: import.meta.env.VITE_ENABLE_AI_CHAT === 'true',
   studio3D: import.meta.env.VITE_ENABLE_3D_STUDIO === 'true',
-  shop: import.meta.env.VITE_ENABLE_SHOP === 'true',
 } as const
 
 // Navigation
@@ -97,11 +96,6 @@ export const NAVIGATION = [
     label: 'Studio',
     icon: 'Box',
     path: '/studio',
-  },
-  {
-    label: 'Shop',
-    icon: 'ShoppingCart',
-    path: '/shop',
   },
   {
     label: 'Settings',
@@ -265,13 +259,6 @@ export const SAMPLE_COMMANDS = [
     description: 'Save current project to storage',
     category: 'action' as const,
     keywords: ['save', 'export', 'download'],
-  },
-  {
-    id: 'go-to-shop',
-    label: 'Go to Shop',
-    description: 'Navigate to the product shop',
-    category: 'navigation' as const,
-    keywords: ['shop', 'products', 'navigate'],
   },
   {
     id: 'go-to-studio',
