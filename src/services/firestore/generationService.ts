@@ -13,7 +13,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore'
 import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase'
-import { GenerationDoc } from '@/types/firebase'
+import { GenerationDoc, ExecutionPayload, ExecutionResult } from '@/types/firebase'
 
 const db = getFirebaseDb()
 
@@ -163,6 +163,53 @@ export async function getGeneration(generationId: string): Promise<GenerationDoc
   }
 
   return { id: docSnap.id, ...docSnap.data() } as GenerationDoc
+}
+
+/**
+ * Update generation with execution payload
+ * Called after plan compilation but before execution
+ */
+export async function updateGenerationExecutionPayload(
+  generationId: string,
+  payload: ExecutionPayload,
+  planningTimeMs?: number
+): Promise<void> {
+  if (!isFirebaseConfigured() || !db) {
+    return
+  }
+
+  const genRef = doc(db, 'generations', generationId)
+  await updateDoc(genRef, {
+    status: 'validated',
+    executionPayload: payload,
+    ...(planningTimeMs && { planningTimeMs }),
+    updatedAt: Timestamp.now(),
+  })
+}
+
+/**
+ * Update generation with execution result
+ * Called after scene execution completes
+ */
+export async function updateGenerationExecutionResult(
+  generationId: string,
+  result: ExecutionResult,
+  sceneId?: string,
+  executionTimeMs?: number
+): Promise<void> {
+  if (!isFirebaseConfigured() || !db) {
+    return
+  }
+
+  const genRef = doc(db, 'generations', generationId)
+  await updateDoc(genRef, {
+    status: result.success ? 'complete' : 'error',
+    executionResult: result,
+    ...(sceneId && { outputSceneId: sceneId }),
+    ...(executionTimeMs && { executionTimeMs }),
+    ...(result.errors && { errorMessage: result.errors[0] }),
+    updatedAt: Timestamp.now(),
+  })
 }
 
 /**

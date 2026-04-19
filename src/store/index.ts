@@ -5,4 +5,3 @@
 export { useUIStore } from './uiStore'
 export { useSceneStore } from './sceneStore'
 export { useAIStore } from './aiStore'
-export { useShopStore } from './shopStore'

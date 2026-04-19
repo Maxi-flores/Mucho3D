@@ -1,33 +1,35 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ShoppingCart, Minus, Plus, Package, Truck, Shield } from 'lucide-react'
-import { useShopStore } from '@/store'
+import type { Product } from '@/types'
 import { modalBackdrop, modalContent } from '@/lib/animations'
 import { formatCurrency } from '@/lib/utils'
 import { Button, Badge, Panel } from '@/components/ui'
 
-export function ProductDetail() {
-  const selectedProduct = useShopStore((state) => state.selectedProduct)
-  const setSelectedProduct = useShopStore((state) => state.setSelectedProduct)
-  const addToCart = useShopStore((state) => state.addToCart)
+interface ProductDetailProps {
+  product: Product | null
+  onClose: () => void
+  onAddToCart?: (product: Product, quantity: number) => void
+}
 
+export function ProductDetail({ product, onClose, onAddToCart }: ProductDetailProps) {
   const [quantity, setQuantity] = useState(1)
 
-  if (!selectedProduct) return null
+  if (!product) return null
 
   const handleClose = () => {
-    setSelectedProduct(null)
+    onClose()
     setQuantity(1)
   }
 
   const handleAddToCart = () => {
-    addToCart(selectedProduct, quantity)
+    onAddToCart?.(product, quantity)
     handleClose()
   }
 
   return (
     <AnimatePresence>
-      {selectedProduct && (
+      {product && (
         <>
           {/* Backdrop */}
           <motion.div
@@ -81,32 +83,32 @@ export function ProductDetail() {
                     {/* Title and Category */}
                     <div>
                       <Badge variant="primary" size="sm">
-                        {selectedProduct.category}
+                        {product.category}
                       </Badge>
                       <h2 className="text-3xl font-bold text-white mt-3">
-                        {selectedProduct.name}
+                        {product.name}
                       </h2>
                       <p className="text-white/60 mt-2">
-                        {selectedProduct.description}
+                        {product.description}
                       </p>
                     </div>
 
                     {/* Price */}
                     <div>
                       <div className="text-4xl font-bold text-primary font-mono">
-                        {formatCurrency(selectedProduct.price, selectedProduct.currency)}
+                        {formatCurrency(product.price, product.currency)}
                       </div>
                       <div className="text-sm text-white/60 mt-1">
-                        {selectedProduct.stock > 0
-                          ? `${selectedProduct.stock} in stock`
+                        {product.stock > 0
+                          ? `${product.stock} in stock`
                           : 'Out of stock'}
                       </div>
                     </div>
 
                     {/* Tags */}
-                    {selectedProduct.tags && selectedProduct.tags.length > 0 && (
+                    {product.tags && product.tags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {selectedProduct.tags.map((tag) => (
+                        {product.tags.map((tag) => (
                           <Badge key={tag} variant="default">
                             {tag}
                           </Badge>
@@ -134,8 +136,8 @@ export function ProductDetail() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => setQuantity(Math.min(selectedProduct.stock, quantity + 1))}
-                          disabled={quantity >= selectedProduct.stock}
+                          onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
+                          disabled={quantity >= product.stock}
                         >
                           <Plus size={16} />
                         </Button>
@@ -147,11 +149,11 @@ export function ProductDetail() {
                       variant="primary"
                       size="lg"
                       onClick={handleAddToCart}
-                      disabled={selectedProduct.stock === 0}
+                      disabled={product.stock === 0}
                       leftIcon={<ShoppingCart size={20} />}
                       className="w-full"
                     >
-                      Add to Cart - {formatCurrency(selectedProduct.price * quantity, selectedProduct.currency)}
+                      Add to Cart - {formatCurrency(product.price * quantity, product.currency)}
                     </Button>
 
                     {/* Features */}
@@ -171,11 +173,11 @@ export function ProductDetail() {
                     </div>
 
                     {/* Specifications */}
-                    {selectedProduct.specifications && (
+                    {product.specifications && (
                       <div className="pt-4 border-t border-white/10">
                         <h3 className="font-semibold text-white mb-3">Specifications</h3>
                         <div className="space-y-2">
-                          {Object.entries(selectedProduct.specifications).map(([key, value]) => (
+                          {Object.entries(product.specifications).map(([key, value]) => (
                             <div key={key} className="flex justify-between text-sm">
                               <span className="text-white/60">{key}</span>
                               <span className="text-white font-mono">{value}</span>

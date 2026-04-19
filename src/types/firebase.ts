@@ -50,6 +50,28 @@ export interface SceneDoc {
 // Generations Collection: generations/{generationId}
 // Core AI pipeline record — tracks prompt → plan → execution → output
 // ============================================================================
+export interface ExecutionPayload {
+  instructions: Array<{
+    type: string
+    targetId?: string
+    params?: Record<string, unknown>
+  }>
+  metadata?: Record<string, unknown>
+}
+
+export interface ExecutionResult {
+  success: boolean
+  objects: SceneObject[]
+  executionTimeMs: number
+  exportUrls?: {
+    glb?: string
+    fbx?: string
+    preview?: string
+  }
+  summary?: string
+  errors?: string[]
+}
+
 export interface GenerationDoc {
   id: string
   projectId: string
@@ -57,11 +79,15 @@ export interface GenerationDoc {
   sessionId?: string
   prompt: string
   structuredPlan?: Record<string, unknown> | null
-  status: 'pending' | 'running' | 'complete' | 'error'
+  executionPayload?: ExecutionPayload | null
+  executionResult?: ExecutionResult | null
+  status: 'pending' | 'planning' | 'validated' | 'executing' | 'complete' | 'error'
   errorMessage?: string | null
   outputSceneId?: string | null
   outputAssetUrl?: string | null
+  planningTimeMs?: number
   executionTimeMs?: number
+  totalTimeMs?: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }

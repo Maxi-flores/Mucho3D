@@ -31,6 +31,7 @@ export interface SceneObject {
   rotation: [number, number, number]
   scale: [number, number, number]
   color?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface CameraState {

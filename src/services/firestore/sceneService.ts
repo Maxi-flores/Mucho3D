@@ -18,26 +18,58 @@ import { SceneObject, CameraState } from '@/types'
 const db = getFirebaseDb()
 
 /**
+ * Save a complete scene document
+ * Used by execution layer to save generated scenes
+ */
+export async function saveSceneDoc(sceneData: SceneDoc): Promise<SceneDoc> {
+  if (!isFirebaseConfigured() || !db) {
+    // Demo fallback
+    return sceneData
+  }
+
+  const scenesCollection = collection(db, 'scenes')
+  const docRef = await addDoc(scenesCollection, {
+    projectId: sceneData.projectId,
+    userId: sceneData.userId,
+    version: sceneData.version,
+    objects: sceneData.objects,
+    camera: sceneData.camera,
+    settings: sceneData.settings,
+    createdAt: sceneData.createdAt,
+    updatedAt: sceneData.updatedAt,
+  })
+
+  const docSnap = await getDoc(docRef)
+  return { id: docRef.id, ...docSnap.data() } as SceneDoc
+}
+
+/**
  * Save or create a scene for a project
  */
 export async function saveScene(
-  projectId: string,
-  userId: string,
-  objects: SceneObject[],
-  camera: CameraState,
-  settings: SceneSettings
+  projectIdOrData: string | SceneDoc,
+  userId?: string,
+  objects?: SceneObject[],
+  camera?: CameraState,
+  settings?: SceneSettings
 ): Promise<SceneDoc> {
+  // Handle overload: saveScene(sceneDoc) or saveScene(projectId, userId, objects, camera, settings)
+  if (typeof projectIdOrData === 'object') {
+    return saveSceneDoc(projectIdOrData)
+  }
+
+  const projectId = projectIdOrData
   if (!isFirebaseConfigured() || !db) {
     // Demo fallback
     const id = 'scene-' + Math.random().toString(36).slice(2, 9)
     return {
       id,
       projectId,
-      userId,
+      userId: userId || '',
       version: 1,
-      objects,
-      camera,
-      settings,
+      objects: objects || [],
+      camera: camera || { position: [0, 0, 0], target: [0, 0, 0], fov: 75, zoom: 1 },
+      settings: settings || { showGrid: true, showWireframe: false, ambientIntensity: 0.5 },
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     }

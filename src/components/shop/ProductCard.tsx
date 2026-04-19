@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { ShoppingCart, Star } from 'lucide-react'
 import type { Product } from '@/types'
-import { useShopStore } from '@/store'
 import { cardHover } from '@/lib/animations'
 import { formatCurrency } from '@/lib/utils'
 import { Button, Badge } from '@/components/ui'
@@ -10,11 +9,16 @@ import { cn } from '@/lib/cn'
 interface ProductCardProps {
   product: Product
   size?: '1x1' | '2x1' | '1x2' | '2x2'
+  onSelect?: (product: Product) => void
+  onAddToCart?: (product: Product) => void
 }
 
-export function ProductCard({ product, size = '1x1' }: ProductCardProps) {
-  const setSelectedProduct = useShopStore((state) => state.setSelectedProduct)
-  const addToCart = useShopStore((state) => state.addToCart)
+export function ProductCard({
+  product,
+  size = '1x1',
+  onSelect,
+  onAddToCart,
+}: ProductCardProps) {
 
   const sizeClasses = {
     '1x1': 'col-span-1 row-span-1',
@@ -25,7 +29,7 @@ export function ProductCard({ product, size = '1x1' }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
-    addToCart(product)
+    onAddToCart?.(product)
   }
 
   return (
@@ -34,7 +38,7 @@ export function ProductCard({ product, size = '1x1' }: ProductCardProps) {
       initial="initial"
       whileHover="hover"
       whileTap="tap"
-      onClick={() => setSelectedProduct(product)}
+      onClick={() => onSelect?.(product)}
       className={cn(
         'card-hover relative overflow-hidden cursor-pointer group',
         sizeClasses[size],

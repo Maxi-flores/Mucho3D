@@ -111,7 +111,9 @@ export function ProjectDetail() {
                     </p>
                     <p>
                       <span className="text-white">In Progress:</span>{' '}
-                      {generations.filter((g) => g.status === 'running').length}
+                      {generations.filter((g) =>
+                        ['planning', 'validated', 'executing'].includes(g.status)
+                      ).length}
                     </p>
                     <p>
                       <span className="text-white">Pending:</span>{' '}
@@ -146,7 +148,7 @@ export function ProjectDetail() {
                         <div className={`px-3 py-1 rounded-full text-xs font-medium ml-4 ${
                           gen.status === 'complete'
                             ? 'bg-green-500/20 text-green-400'
-                            : gen.status === 'running'
+                            : ['planning', 'validated', 'executing'].includes(gen.status)
                             ? 'bg-blue-500/20 text-blue-400'
                             : gen.status === 'error'
                             ? 'bg-red-500/20 text-red-400'

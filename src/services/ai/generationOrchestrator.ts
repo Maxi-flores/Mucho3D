@@ -2,11 +2,21 @@ import {
   updateGenerationStatus,
   updateGenerationError,
   createGeneration,
+  updateGenerationExecutionPayload,
+  updateGenerationExecutionResult,
+  saveScene,
 } from '@/services/firestore'
 import { addExecutionLog } from './executionLogger'
 import { generateScenePlan, generateDemoScenePlan, isOllamaAvailable } from './ollamaService'
 import { parseScenePlan, ScenePlan } from '@/schema/scenePlan'
 import { GenerationDoc } from '@/types/firebase'
+import {
+  compilePlan,
+  executePayload,
+  submitToBlender,
+  mapBlenderResponseToResult,
+  mapExecutionResultToSceneData,
+} from '@/services/execution'
 
 /**
  * Generation Orchestrator
@@ -31,9 +41,10 @@ export interface OrchestrationResult {
  * 1. Create generation record (status: pending)
  * 2. Update to planning, call Ollama
  * 3. Extract and validate JSON
- * 4. Update to validated, log plan
- * 5. (Future) Execute in Blender
- * 6. Update to complete or error
+ * 4. Compile plan to execution payload
+ * 5. Execute in Blender (or local fallback)
+ * 6. Save scene and result, update generation
+ * 7. Update to complete or error
  */
 export async function orchestrateGeneration(
   projectId: string,
@@ -57,7 +68,7 @@ export async function orchestrateGeneration(
     )
 
     // Step 2: Update to planning and call Ollama
-    await updateGenerationStatus(generation.id, 'running')
+    await updateGenerationStatus(generation.id, 'planning')
     await addExecutionLog(
       generation.id,
       projectId,
@@ -148,9 +159,10 @@ export async function orchestrateGeneration(
     }
 
     const plan = parseResult.data!
+    const planningTimeMs = Date.now() - startTime
 
     // Update generation with structured plan
-    await updateGenerationStatus(generation.id, 'complete', plan)
+    await updateGenerationStatus(generation.id, 'planning', plan)
     await addExecutionLog(
       generation.id,
       projectId,
@@ -165,11 +177,138 @@ export async function orchestrateGeneration(
       'info'
     )
 
-    // Step 4: Return success with plan
+    // Step 4: Compile plan to execution payload
+    await addExecutionLog(
+      generation.id,
+      projectId,
+      userId,
+      'compilation_start',
+      'Compiling scene plan to execution instructions',
+      {},
+      'info'
+    )
+
+    const compileResult = compilePlan(plan)
+    if (!compileResult.success) {
+      const error = compileResult.error || 'Compilation failed'
+      await updateGenerationError(generation.id, error)
+      await addExecutionLog(
+        generation.id,
+        projectId,
+        userId,
+        'compilation_error',
+        error,
+        {},
+        'error'
+      )
+      return {
+        success: false,
+        generation,
+        plan,
+        error,
+        durationMs: Date.now() - startTime,
+      }
+    }
+
+    const payload = compileResult.payload!
+    await updateGenerationExecutionPayload(generation.id, payload, planningTimeMs)
+    await addExecutionLog(
+      generation.id,
+      projectId,
+      userId,
+      'compilation_success',
+      'Scene plan compiled to execution payload',
+      { instructionCount: payload.instructions.length },
+      'info'
+    )
+
+    // Step 5: Execute payload (local or Blender)
+    await updateGenerationStatus(generation.id, 'executing')
+    await addExecutionLog(
+      generation.id,
+      projectId,
+      userId,
+      'execution_start',
+      'Starting scene execution',
+      {},
+      'info'
+    )
+
+    const executionStartTime = Date.now()
+
+    // Try Blender first, fall back to local execution if unavailable
+    const blenderResponse = await submitToBlender(generation.id, payload)
+    let executionResult = blenderResponse.success
+      ? mapBlenderResponseToResult(blenderResponse)
+      : await executePayload(payload)
+
+    const executionTimeMs = Date.now() - executionStartTime
+    executionResult.executionTimeMs = executionTimeMs
+
+    if (!executionResult.success) {
+      const error = executionResult.errors?.[0] || 'Execution failed'
+      await updateGenerationError(generation.id, error)
+      await addExecutionLog(
+        generation.id,
+        projectId,
+        userId,
+        'execution_error',
+        error,
+        { errors: executionResult.errors },
+        'error'
+      )
+      return {
+        success: false,
+        generation,
+        plan,
+        error,
+        durationMs: Date.now() - startTime,
+      }
+    }
+
+    // Step 6: Save scene and result
+    const sceneData = mapExecutionResultToSceneData(
+      executionResult,
+      projectId,
+      userId,
+      generation.id
+    )
+
+    const savedScene = await saveScene(sceneData)
+
+    await updateGenerationExecutionResult(
+      generation.id,
+      executionResult,
+      savedScene.id,
+      executionTimeMs
+    )
+
+    await addExecutionLog(
+      generation.id,
+      projectId,
+      userId,
+      'execution_success',
+      'Scene executed and saved',
+      {
+        objectCount: executionResult.objects.length,
+        sceneId: savedScene.id,
+        executionTimeMs,
+      },
+      'info'
+    )
+
+    // Step 7: Return success with complete data
+    const totalTimeMs = Date.now() - startTime
     const updatedGeneration: GenerationDoc = {
       ...generation,
       structuredPlan: plan,
+      executionPayload: payload,
+      executionResult: executionResult,
       status: 'complete',
+      outputSceneId: savedScene.id,
+      planningTimeMs,
+      executionTimeMs,
+      totalTimeMs,
       updatedAt: generation.updatedAt,
     }
 
@@ -177,7 +316,7 @@ export async function orchestrateGeneration(
       success: true,
       generation: updatedGeneration,
       plan,
-      durationMs: Date.now() - startTime,
+      durationMs: totalTimeMs,
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : 'Unknown orchestration error'
