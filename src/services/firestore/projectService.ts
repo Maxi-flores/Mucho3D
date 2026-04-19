@@ -12,8 +12,12 @@ import {
 } from 'firebase/firestore'
 import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase'
 import { ProjectDoc } from '@/types/firebase'
+import { StudioNode, StudioViewport } from '@/types/studio'
 
 const db = getFirebaseDb()
+const demoProjects = new Map<string, ProjectDoc>()
+
+const defaultStudioViewport: StudioViewport = { x: 0, y: 0, zoom: 1 }
 
 /**
  * Create a new project
@@ -26,15 +30,23 @@ export async function createProject(
   if (!isFirebaseConfigured() || !db) {
     // Demo fallback: return mock project
     const id = 'proj-' + Math.random().toString(36).slice(2, 9)
-    return {
+    const project: ProjectDoc = {
       id,
       userId,
       name,
       description: description || '',
       status: 'active',
+      studioNodes: [],
+      studioViewport: defaultStudioViewport,
+      projectTags: [],
+      targetFormat: 'glb',
+      complexityEstimate: 'low',
+      referenceLinks: [],
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     }
+    demoProjects.set(id, project)
+    return project
   }
 
   const projectsCollection = collection(db, 'projects')
@@ -43,6 +55,12 @@ export async function createProject(
     name,
     description: description || '',
     status: 'active',
+    studioNodes: [],
+    studioViewport: defaultStudioViewport,
+    projectTags: [],
+    targetFormat: 'glb',
+    complexityEstimate: 'low',
+    referenceLinks: [],
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   })
@@ -56,8 +74,9 @@ export async function createProject(
  */
 export async function getUserProjects(userId: string): Promise<ProjectDoc[]> {
   if (!isFirebaseConfigured() || !db) {
-    // Demo fallback: return empty array
-    return []
+    return Array.from(demoProjects.values())
+      .filter((project) => project.userId === userId && project.status === 'active')
+      .sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis())
   }
 
   const projectsCollection = collection(db, 'projects')
@@ -80,7 +99,7 @@ export async function getUserProjects(userId: string): Promise<ProjectDoc[]> {
  */
 export async function getProject(projectId: string): Promise<ProjectDoc | null> {
   if (!isFirebaseConfigured() || !db) {
-    return null
+    return demoProjects.get(projectId) || null
   }
 
   const projectRef = doc(db, 'projects', projectId)
@@ -101,7 +120,14 @@ export async function updateProject(
   data: Partial<Omit<ProjectDoc, 'id' | 'createdAt'>>
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) {
-    // Demo fallback: no-op
+    const existing = demoProjects.get(projectId)
+    if (existing) {
+      demoProjects.set(projectId, {
+        ...existing,
+        ...data,
+        updatedAt: Timestamp.now(),
+      })
+    }
     return
   }
 
@@ -113,11 +139,32 @@ export async function updateProject(
 }
 
 /**
+ * Save Project Studio node graph state
+ */
+export async function saveProjectStudio(
+  projectId: string,
+  studioNodes: StudioNode[],
+  studioViewport: StudioViewport
+): Promise<void> {
+  await updateProject(projectId, {
+    studioNodes,
+    studioViewport,
+  })
+}
+
+/**
  * Archive (soft delete) a project
  */
 export async function deleteProject(projectId: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) {
-    // Demo fallback: no-op
+    const existing = demoProjects.get(projectId)
+    if (existing) {
+      demoProjects.set(projectId, {
+        ...existing,
+        status: 'archived',
+        updatedAt: Timestamp.now(),
+      })
+    }
     return
   }
 

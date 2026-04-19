@@ -1,10 +1,12 @@
 import { ScenePlan } from '@/schema/scenePlan'
 import { ExecutionPayload } from '@/types/firebase'
+import { MCP_TOOL_VERSION, MCPToolCall, validateToolCall } from '@/services/mcp/toolRegistry'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
  * Plan Compiler
- * Converts validated scene plans into deterministic execution instructions
- * Only allows whitelisted operations - unknown ops fail safely
+ * Converts validated scene plans into deterministic MCP tool calls.
+ * Only registered MCP tools can be emitted.
  */
 
 interface CompileResult {
@@ -12,19 +14,6 @@ interface CompileResult {
   payload?: ExecutionPayload
   error?: string
 }
-
-const WHITELISTED_OPERATIONS = new Set([
-  'create_primitive',
-  'transform',
-  'apply_material',
-  'apply_color',
-  'boolean_union',
-  'boolean_difference',
-  'boolean_intersection',
-  'mirror',
-  'group',
-  'export_glb',
-])
 
 export function compilePlan(plan: ScenePlan): CompileResult {
   try {
@@ -36,58 +25,92 @@ export function compilePlan(plan: ScenePlan): CompileResult {
       }
     }
 
-    const instructions: ExecutionPayload['instructions'] = []
+    const toolCalls: MCPToolCall[] = []
 
     // Step 1: Create all primitives in order
     for (const obj of plan.objects) {
-      instructions.push({
-        type: 'create_primitive',
-        targetId: obj.id,
-        params: {
+      toolCalls.push(validateToolCall({
+        tool: 'create_primitive',
+        version: MCP_TOOL_VERSION,
+        requestId: uuidv4(),
+        payload: {
           id: obj.id,
           name: obj.name,
-          primitive: obj.primitive,
+          primitiveType: obj.primitive.type,
+          position: obj.primitive.position,
+          rotation: obj.primitive.rotation,
+          scale: obj.primitive.scale,
+          color: obj.primitive.color || '#FFFFFF',
+          segments: obj.primitive.segments,
         },
-      })
+      }))
     }
 
-    // Step 2: Apply operations in order
+    // Step 2: Apply supported operations in order
     if (plan.operations && plan.operations.length > 0) {
       for (const op of plan.operations) {
-        const opAny = op as any
-        // Validate operation type
-        if (!WHITELISTED_OPERATIONS.has(opAny.type)) {
-          return {
-            success: false,
-            error: `Unknown operation type: ${opAny.type}. Allowed: ${Array.from(WHITELISTED_OPERATIONS).join(', ')}`,
-          }
+        switch (op.type) {
+          case 'transform':
+            toolCalls.push(validateToolCall({
+              tool: 'transform_object',
+              version: MCP_TOOL_VERSION,
+              requestId: uuidv4(),
+              payload: {
+                objectId: op.targetId,
+                position: op.position,
+                rotation: op.rotation,
+                scale: op.scale,
+              },
+            }))
+            break
+          case 'apply_color':
+            toolCalls.push(validateToolCall({
+              tool: 'apply_material',
+              version: MCP_TOOL_VERSION,
+              requestId: uuidv4(),
+              payload: {
+                objectId: op.targetId,
+                color: op.color,
+              },
+            }))
+            break
+          case 'apply_material':
+            toolCalls.push(validateToolCall({
+              tool: 'apply_material',
+              version: MCP_TOOL_VERSION,
+              requestId: uuidv4(),
+              payload: {
+                objectId: op.targetId,
+                metallic: op.metallic,
+                roughness: op.roughness,
+                emissive: op.emissive,
+              },
+            }))
+            break
+          case 'export_glb':
+            toolCalls.push(validateToolCall({
+              tool: 'export_scene',
+              version: MCP_TOOL_VERSION,
+              requestId: uuidv4(),
+              payload: {
+                format: 'glb',
+                filename: op.filename,
+              },
+            }))
+            break
+          default:
+            return {
+              success: false,
+              error: `Operation ${op.type} is not mapped to a registered MCP tool`,
+            }
         }
-
-        // Validate operation has required fields
-        if (!('targetId' in opAny)) {
-          return {
-            success: false,
-            error: `Operation ${opAny.type} missing required field: targetId`,
-          }
-        }
-
-        instructions.push({
-          type: opAny.type,
-          targetId: opAny.targetId,
-          params: {
-            // Pass all operation-specific params, type is known to be whitelisted
-            ...Object.fromEntries(
-              Object.entries(opAny).filter(([key]) => key !== 'type' && key !== 'targetId')
-            ),
-          },
-        })
       }
     }
 
     return {
       success: true,
       payload: {
-        instructions,
+        toolCalls,
         metadata: {
           planIntent: plan.intent,
           complexity: plan.metadata?.estimatedComplexity,

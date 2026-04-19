@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore'
-import { doc, updateDoc, arrayUnion, getFirestore } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, arrayUnion, getFirestore } from 'firebase/firestore'
 import { isFirebaseConfigured } from '@/lib/firebase'
 
 /**
@@ -24,8 +24,8 @@ export interface ExecutionLogEntry {
  */
 export async function addExecutionLog(
   generationId: string,
-  _projectId: string,
-  _userId: string,
+  projectId: string,
+  userId: string,
   phase: string,
   message: string,
   payload?: Record<string, unknown>,
@@ -49,9 +49,19 @@ export async function addExecutionLog(
       severity,
     }
 
-    // Append to steps array
+    await setDoc(logRef, {
+      generationId,
+      projectId,
+      userId,
+      errors: [],
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    }, { merge: true })
+
     await updateDoc(logRef, {
       steps: arrayUnion(entry),
+      ...(severity === 'error' && { errors: arrayUnion(message) }),
+      updatedAt: Timestamp.now(),
     })
   } catch (err) {
     // Gracefully handle logging errors

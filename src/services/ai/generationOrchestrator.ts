@@ -12,11 +12,9 @@ import { parseScenePlan, ScenePlan } from '@/schema/scenePlan'
 import { GenerationDoc } from '@/types/firebase'
 import {
   compilePlan,
-  executePayload,
-  submitToBlender,
-  mapBlenderResponseToResult,
   mapExecutionResultToSceneData,
 } from '@/services/execution'
+import { executeMcpToolCalls } from '@/services/mcp/mcpExecutionService'
 
 /**
  * Generation Orchestrator
@@ -42,7 +40,7 @@ export interface OrchestrationResult {
  * 2. Update to planning, call Ollama
  * 3. Extract and validate JSON
  * 4. Compile plan to execution payload
- * 5. Execute in Blender (or local fallback)
+ * 5. Execute through validated MCP tool calls (JS executor is fallback only)
  * 6. Save scene and result, update generation
  * 7. Update to complete or error
  */
@@ -183,7 +181,7 @@ export async function orchestrateGeneration(
       projectId,
       userId,
       'compilation_start',
-      'Compiling scene plan to execution instructions',
+      'Compiling scene plan to MCP tool calls',
       {},
       'info'
     )
@@ -217,12 +215,12 @@ export async function orchestrateGeneration(
       projectId,
       userId,
       'compilation_success',
-      'Scene plan compiled to execution payload',
-      { instructionCount: payload.instructions.length },
+      'Scene plan compiled to MCP execution payload',
+      { toolCallCount: payload.toolCalls.length },
       'info'
     )
 
-    // Step 5: Execute payload (local or Blender)
+    // Step 5: Execute payload through MCP
     await updateGenerationStatus(generation.id, 'executing')
     await addExecutionLog(
       generation.id,
@@ -236,11 +234,12 @@ export async function orchestrateGeneration(
 
     const executionStartTime = Date.now()
 
-    // Try Blender first, fall back to local execution if unavailable
-    const blenderResponse = await submitToBlender(generation.id, payload)
-    let executionResult = blenderResponse.success
-      ? mapBlenderResponseToResult(blenderResponse)
-      : await executePayload(payload)
+    const executionResult = await executeMcpToolCalls(payload, {
+      generationId: generation.id,
+      projectId,
+      userId,
+      allowJsFallback: true,
+    })
 
     const executionTimeMs = Date.now() - executionStartTime
     executionResult.executionTimeMs = executionTimeMs

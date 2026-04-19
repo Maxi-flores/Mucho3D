@@ -1,5 +1,7 @@
 import { Timestamp } from 'firebase/firestore'
 import { SceneObject, CameraState, ChatMessage } from './index'
+import { StudioNode, StudioViewport } from './studio'
+import type { MCPToolCall } from '@/services/mcp/toolRegistry'
 
 // ============================================================================
 // Users Collection: users/{uid}
@@ -8,6 +10,15 @@ export interface UserDoc {
   uid: string
   email: string
   name: string
+  avatar?: string | null
+  preferences?: {
+    darkMode: boolean
+    autoSaveProjects: boolean
+  }
+  integrations?: {
+    ollamaModel?: string
+    mcpBridgeEnabled?: boolean
+  }
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -21,6 +32,12 @@ export interface ProjectDoc {
   name: string
   description?: string
   status: 'active' | 'archived'
+  studioNodes?: StudioNode[]
+  studioViewport?: StudioViewport
+  projectTags?: string[]
+  targetFormat?: 'glb' | 'fbx'
+  complexityEstimate?: 'low' | 'medium' | 'high'
+  referenceLinks?: string[]
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -51,11 +68,7 @@ export interface SceneDoc {
 // Core AI pipeline record — tracks prompt → plan → execution → output
 // ============================================================================
 export interface ExecutionPayload {
-  instructions: Array<{
-    type: string
-    targetId?: string
-    params?: Record<string, unknown>
-  }>
+  toolCalls: MCPToolCall[]
   metadata?: Record<string, unknown>
 }
 

@@ -11,6 +11,9 @@ const Studio = lazy(() => import('@/pages/app/Studio').then(m => ({ default: m.S
 const Projects = lazy(() => import('@/pages/app/Projects').then(m => ({ default: m.Projects })))
 const ProjectDetail = lazy(() => import('@/pages/app/ProjectDetail').then(m => ({ default: m.ProjectDetail })))
 const Settings = lazy(() => import('@/pages/app/Settings').then(m => ({ default: m.Settings })))
+const Chat = lazy(() => import('@/pages/Chat').then(m => ({ default: m.Chat })))
+const Builder = lazy(() => import('@/pages/Builder').then(m => ({ default: m.Builder })))
+const ProjectStudio = lazy(() => import('@/pages/app/ProjectStudio').then(m => ({ default: m.ProjectStudio })))
 const SignIn = lazy(() => import('@/pages/auth/SignIn').then(m => ({ default: m.SignIn })))
 
 const LoadingFallback = () => <AuthLoadingScreen />
@@ -79,10 +82,34 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'projects/:projectId/studio',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <ProjectStudio />
+          </Suspense>
+        ),
+      },
+      {
         path: 'settings',
         element: (
           <Suspense fallback={<LoadingFallback />}>
             <Settings />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'chat',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Chat />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'builder',
+        element: (
+          <Suspense fallback={<LoadingFallback />}>
+            <Builder />
           </Suspense>
         ),
       },

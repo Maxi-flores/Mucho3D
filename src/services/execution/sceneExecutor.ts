@@ -1,10 +1,18 @@
 import { SceneObject } from '@/types'
 import { ExecutionPayload, ExecutionResult } from '@/types/firebase'
+import {
+  ApplyMaterialInputSchema,
+  CreatePrimitiveInputSchema,
+  ExportSceneInputSchema,
+  MCPToolCall,
+  TransformObjectInputSchema,
+  validateToolCall,
+} from '@/services/mcp/toolRegistry'
 
 /**
  * Scene Executor
- * Executes deterministic instructions from compiled plan
- * Generates scene objects suitable for Studio rendering
+ * JS fallback executor for validated MCP tool calls.
+ * MCP bridge execution is the primary path; this is used only when explicit fallback is requested.
  */
 
 interface ExecutionContext {
@@ -22,9 +30,8 @@ export async function executePayload(payload: ExecutionPayload): Promise<Executi
   }
 
   try {
-    // Execute each instruction in order
-    for (const instruction of payload.instructions) {
-      const result = executeInstruction(instruction, context)
+    for (const toolCall of payload.toolCalls) {
+      const result = executeToolCall(toolCall, context)
       if (!result.success) {
         context.errors.push(result.error || 'Unknown execution error')
       }
@@ -37,7 +44,7 @@ export async function executePayload(payload: ExecutionPayload): Promise<Executi
       success: context.errors.length === 0,
       objects,
       executionTimeMs: Date.now() - startTime,
-      summary: `Executed ${payload.instructions.length} instructions, created ${objects.length} objects`,
+      summary: `Fallback executed ${payload.toolCalls.length} MCP tool calls, created ${objects.length} objects`,
       errors: context.errors.length > 0 ? context.errors : undefined,
     }
   } catch (err) {
@@ -57,67 +64,50 @@ interface InstructionResult {
   error?: string
 }
 
-function executeInstruction(
-  instruction: ExecutionPayload['instructions'][0],
+function executeToolCall(
+  toolCall: MCPToolCall,
   context: ExecutionContext
 ): InstructionResult {
   try {
-    switch (instruction.type) {
+    const validatedCall = validateToolCall(toolCall)
+
+    switch (validatedCall.tool) {
       case 'create_primitive':
-        return executCreatePrimitive(instruction, context)
-      case 'transform':
-        return executeTransform(instruction, context)
-      case 'apply_color':
-        return executeApplyColor(instruction, context)
+        return executeCreatePrimitive(validatedCall, context)
+      case 'transform_object':
+        return executeTransform(validatedCall, context)
       case 'apply_material':
-        return executeApplyMaterial(instruction, context)
-      case 'mirror':
-        return executeMirror(instruction, context)
-      case 'group':
-      case 'boolean_union':
-      case 'boolean_difference':
-      case 'boolean_intersection':
-      case 'export_glb':
-        // Scaffold for future implementation
-        return { success: true }
+        return executeApplyMaterial(validatedCall, context)
+      case 'export_scene':
+        return executeExportScene(validatedCall, context)
       default:
-        return { success: false, error: `Unknown operation: ${instruction.type}` }
+        return { success: false, error: `Unknown MCP tool: ${validatedCall.tool}` }
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error'
-    return { success: false, error: `Instruction execution failed: ${errorMsg}` }
+    return { success: false, error: `Fallback tool execution failed: ${errorMsg}` }
   }
 }
 
-function executCreatePrimitive(
-  instruction: ExecutionPayload['instructions'][0],
+function executeCreatePrimitive(
+  toolCall: MCPToolCall,
   context: ExecutionContext
 ): InstructionResult {
-  const params = instruction.params as any
-  const id = params?.id || instruction.targetId || `obj-${context.nextId++}`
-
-  const primitive = params?.primitive
-  if (!primitive) {
-    return { success: false, error: 'Missing primitive definition' }
-  }
-
-  // Clamp numeric values to safe range
-  const position = clampVector3(primitive.position || [0, 0, 0])
-  const scale = clampVector3(primitive.scale || [1, 1, 1])
-  const rotation = clampVector3(primitive.rotation || [0, 0, 0])
+  const payload = CreatePrimitiveInputSchema.parse(toolCall.payload)
+  const id = payload.id || `obj-${context.nextId++}`
 
   const obj: SceneObject = {
     id,
     type: 'mesh',
-    name: params?.name || `${primitive.type}`,
+    name: payload.name,
     visible: true,
-    position,
-    rotation,
-    scale,
+    position: payload.position,
+    rotation: payload.rotation,
+    scale: payload.scale,
     metadata: {
-      primitiveType: primitive.type,
-      color: primitive.color || '#FFFFFF',
-      segments: primitive.segments || 32,
+      primitiveType: payload.primitiveType,
+      color: payload.color,
+      segments: payload.segments || 32,
     },
   }
 
@@ -126,113 +116,55 @@ function executCreatePrimitive(
 }
 
 function executeTransform(
-  instruction: ExecutionPayload['instructions'][0],
+  toolCall: MCPToolCall,
   context: ExecutionContext
 ): InstructionResult {
-  const targetId = instruction.targetId
-  if (!targetId) {
-    return { success: false, error: 'Transform missing targetId' }
-  }
-
-  const obj = context.objects.get(targetId)
+  const payload = TransformObjectInputSchema.parse(toolCall.payload)
+  const obj = context.objects.get(payload.objectId)
   if (!obj) {
-    return { success: false, error: `Target object not found: ${targetId}` }
+    return { success: false, error: `Target object not found: ${payload.objectId}` }
   }
 
-  const params = instruction.params as any
-  if (params?.position) obj.position = clampVector3(params.position)
-  if (params?.rotation) obj.rotation = clampVector3(params.rotation)
-  if (params?.scale) obj.scale = clampVector3(params.scale)
-
-  return { success: true }
-}
-
-function executeApplyColor(
-  instruction: ExecutionPayload['instructions'][0],
-  context: ExecutionContext
-): InstructionResult {
-  const targetId = instruction.targetId
-  if (!targetId) {
-    return { success: false, error: 'Apply color missing targetId' }
-  }
-
-  const obj = context.objects.get(targetId)
-  if (!obj) {
-    return { success: false, error: `Target object not found: ${targetId}` }
-  }
-
-  const params = instruction.params as any
-  const color = params?.color
-  if (!color || typeof color !== 'string') {
-    return { success: false, error: 'Invalid color value' }
-  }
-
-  if (!obj.metadata) obj.metadata = {}
-  obj.metadata.color = color
+  if (payload.position) obj.position = payload.position
+  if (payload.rotation) obj.rotation = payload.rotation
+  if (payload.scale) obj.scale = payload.scale
 
   return { success: true }
 }
 
 function executeApplyMaterial(
-  instruction: ExecutionPayload['instructions'][0],
+  toolCall: MCPToolCall,
   context: ExecutionContext
 ): InstructionResult {
-  const targetId = instruction.targetId
-  if (!targetId) {
-    return { success: false, error: 'Apply material missing targetId' }
-  }
-
-  const obj = context.objects.get(targetId)
+  const payload = ApplyMaterialInputSchema.parse(toolCall.payload)
+  const obj = context.objects.get(payload.objectId)
   if (!obj) {
-    return { success: false, error: `Target object not found: ${targetId}` }
+    return { success: false, error: `Target object not found: ${payload.objectId}` }
   }
 
-  const params = instruction.params as any
   if (!obj.metadata) obj.metadata = {}
+  if (payload.color) obj.metadata.color = payload.color
 
   obj.metadata.material = {
-    metallic: clampNumber(params?.metallic || 0, 0, 1),
-    roughness: clampNumber(params?.roughness || 0.5, 0, 1),
-    emissive: params?.emissive || undefined,
+    metallic: payload.metallic,
+    roughness: payload.roughness,
+    emissive: payload.emissive,
   }
 
   return { success: true }
 }
 
-function executeMirror(
-  instruction: ExecutionPayload['instructions'][0],
+function executeExportScene(
+  toolCall: MCPToolCall,
   context: ExecutionContext
 ): InstructionResult {
-  const targetId = instruction.targetId
-  if (!targetId) {
-    return { success: false, error: 'Mirror missing targetId' }
-  }
-
-  const obj = context.objects.get(targetId)
-  if (!obj) {
-    return { success: false, error: `Target object not found: ${targetId}` }
-  }
-
-  // Scaffold: actual mirroring logic would clone and invert axis
-  if (!obj.metadata) obj.metadata = {}
-  obj.metadata.isMirrored = true
+  ExportSceneInputSchema.parse(toolCall.payload)
+  context.objects.forEach((obj) => {
+    obj.metadata = {
+      ...obj.metadata,
+      exportRequested: true,
+    }
+  })
 
   return { success: true }
-}
-
-function clampVector3(v: any): [number, number, number] {
-  if (!Array.isArray(v) || v.length !== 3) {
-    return [0, 0, 0]
-  }
-  return [
-    clampNumber(v[0], -1000, 1000),
-    clampNumber(v[1], -1000, 1000),
-    clampNumber(v[2], -1000, 1000),
-  ]
-}
-
-function clampNumber(n: any, min: number, max: number): number {
-  const num = typeof n === 'number' ? n : 0
-  if (!isFinite(num)) return (min + max) / 2
-  return Math.max(min, Math.min(max, num))
 }

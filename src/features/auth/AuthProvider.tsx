@@ -11,6 +11,7 @@ import {
 import {
   getFirebaseAuth,
 } from '@/lib/firebase'
+import { upsertUserProfile } from '@/services/firestore'
 import { User } from '@/types'
 
 export interface AuthContextType {
@@ -57,6 +58,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
             email: parsed.email || 'demo@example.com',
             name: parsed.name || 'Demo User',
           })
+          upsertUserProfile({
+            id: parsed.id || 'demo-user',
+            email: parsed.email || 'demo@example.com',
+            name: parsed.name || 'Demo User',
+          }).catch((err) => console.error('Could not save demo user profile:', err))
         } catch {
           // Invalid localStorage data, ignore
         }
@@ -65,10 +71,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUserToAppUser(firebaseUser))
+        const appUser = firebaseUserToAppUser(firebaseUser)
+        setUser(appUser)
         setError(null)
+        try {
+          await upsertUserProfile(appUser)
+        } catch (err) {
+          console.error('Could not save user profile:', err)
+        }
       } else {
         setUser(null)
       }
@@ -94,13 +106,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: email.split('@')[0],
       }
       localStorage.setItem('mucho3d-user', JSON.stringify(demoUser))
+      await upsertUserProfile(demoUser)
       setUser(demoUser)
       return
     }
 
     try {
       const result = await signInWithEmailAndPassword(auth, email, password)
-      setUser(firebaseUserToAppUser(result.user))
+      const appUser = firebaseUserToAppUser(result.user)
+      await upsertUserProfile(appUser)
+      setUser(appUser)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       setError(errorMessage)
@@ -119,6 +134,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: 'Demo User',
       }
       localStorage.setItem('mucho3d-user', JSON.stringify(demoUser))
+      await upsertUserProfile(demoUser)
       setUser(demoUser)
       return
     }
@@ -126,7 +142,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const provider = new GoogleAuthProvider()
       const result = await signInWithPopup(auth, provider)
-      setUser(firebaseUserToAppUser(result.user))
+      const appUser = firebaseUserToAppUser(result.user)
+      await upsertUserProfile(appUser)
+      setUser(appUser)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       setError(errorMessage)
@@ -145,6 +163,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: 'Demo User',
       }
       localStorage.setItem('mucho3d-user', JSON.stringify(demoUser))
+      await upsertUserProfile(demoUser)
       setUser(demoUser)
       return
     }
@@ -155,7 +174,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         prompt: 'consent',
       })
       const result = await signInWithPopup(auth, provider)
-      setUser(firebaseUserToAppUser(result.user))
+      const appUser = firebaseUserToAppUser(result.user)
+      await upsertUserProfile(appUser)
+      setUser(appUser)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       setError(errorMessage)

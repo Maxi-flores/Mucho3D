@@ -6,6 +6,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useUIStore } from '@/store'
@@ -16,6 +18,8 @@ import { fadeInLeft } from '@/lib/animations'
 const navigation = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/app/dashboard' },
   { name: 'Studio', icon: Box, path: '/app/studio' },
+  { name: 'Chat', icon: MessageCircle, path: '/app/chat' },
+  { name: 'Builder', icon: Zap, path: '/app/builder' },
   { name: 'Settings', icon: Settings, path: '/app/settings' },
 ]
 
