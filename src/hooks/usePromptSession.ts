@@ -2,12 +2,11 @@ import { useState, useCallback } from 'react'
 import { useAuth } from './useAuth'
 import {
   createSession,
-  getSession,
   appendMessage,
   createGeneration,
-  updateGenerationStatus,
 } from '@/services/firestore'
-import { PromptSessionDoc, StoredMessage, GenerationDoc } from '@/types/firebase'
+import { orchestrateGeneration } from '@/services/ai/generationOrchestrator'
+import { StoredMessage, GenerationDoc } from '@/types/firebase'
 
 interface UsePromptSessionReturn {
   sessionId: string | null
@@ -74,21 +73,7 @@ export function usePromptSession(projectId: string | undefined): UsePromptSessio
       // Create generation record (status: pending)
       const generation = await createGeneration(projectId, user.id, prompt, sid)
 
-      // TODO: Phase 4 — Call Ollama to generate structured plan
-      // For now, simulate response after delay
-      setTimeout(async () => {
-        try {
-          await updateGenerationStatus(
-            generation.id,
-            'complete',
-            { intent: prompt, confidence: 0.8, objects: [] }
-          )
-        } catch (err) {
-          console.error('Failed to update generation:', err)
-        }
-      }, 1500)
-
-      // Add assistant response
+      // Add initial assistant response while generating
       const assistantMessage: StoredMessage = {
         id: 'msg-' + (Date.now() + 1),
         role: 'assistant',
@@ -98,6 +83,41 @@ export function usePromptSession(projectId: string | undefined): UsePromptSessio
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+
+      // Call real orchestrator to generate and validate plan
+      const result = await orchestrateGeneration(projectId, user.id, prompt, sid)
+
+      if (result.success && result.plan) {
+        // Plan generated successfully
+        const successMessage: StoredMessage = {
+          id: 'msg-' + (Date.now() + 2),
+          role: 'assistant',
+          content: `Generated ${result.plan.objects.length} object(s) with ${result.plan.operations.length} operation(s). Complexity: ${result.plan.metadata?.estimatedComplexity || 'unknown'}`,
+          timestamp: new Date(),
+          metadata: {
+            generationId: generation.id,
+            status: 'complete',
+            plan: result.plan,
+            duration: result.durationMs,
+          },
+        }
+        setMessages((prev) => [...prev, successMessage])
+      } else {
+        // Plan generation failed
+        const errorMessage: StoredMessage = {
+          id: 'msg-' + (Date.now() + 2),
+          role: 'assistant',
+          content: `Generation failed: ${result.error || 'Unknown error'}`,
+          timestamp: new Date(),
+          metadata: {
+            generationId: generation.id,
+            status: 'error',
+            error: result.error,
+          },
+        }
+        setMessages((prev) => [...prev, errorMessage])
+      }
+
       setIsGenerating(false)
 
       return generation

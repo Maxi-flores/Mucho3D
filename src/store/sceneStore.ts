@@ -7,6 +7,8 @@ interface SceneState {
   selectedObjectId: string | null
   addObject: (object: SceneObject) => void
   removeObject: (id: string) => void
+  deleteObject: (id: string) => void
+  duplicateObject: (id: string) => void
   updateObject: (id: string, updates: Partial<SceneObject>) => void
   selectObject: (id: string | null) => void
 
@@ -47,7 +49,7 @@ interface SceneState {
   importFromJSON: (json: string) => void
 }
 
-export const useSceneStore = create<SceneState>((set) => ({
+export const useSceneStore = create<SceneState>((set, get) => ({
   // Scene objects
   objects: [
     {
@@ -67,6 +69,21 @@ export const useSceneStore = create<SceneState>((set) => ({
     set((state) => ({
       objects: state.objects.filter((obj) => obj.id !== id),
     })),
+  deleteObject: (id) =>
+    set((state) => ({
+      objects: state.objects.filter((obj) => obj.id !== id),
+    })),
+  duplicateObject: (id) =>
+    set((state) => {
+      const objToDuplicate = state.objects.find((obj) => obj.id === id)
+      if (!objToDuplicate) return { objects: state.objects }
+      const newObj = {
+        ...objToDuplicate,
+        id: 'obj-' + Math.random().toString(36).slice(2, 9),
+        name: objToDuplicate.name + ' (Copy)',
+      }
+      return { objects: [...state.objects, newObj] }
+    }),
   updateObject: (id, updates) =>
     set((state) => ({
       objects: state.objects.map((obj) =>
@@ -125,8 +142,8 @@ export const useSceneStore = create<SceneState>((set) => ({
   setAmbientIntensity: (intensity) => set({ ambientIntensity: intensity }),
 
   // Export/Import
-  exportAsJSON: () => {
-    const state = useSceneStore.getState()
+  exportAsJSON: (): string => {
+    const state = get()
     return JSON.stringify(
       {
         version: '3.0.0',

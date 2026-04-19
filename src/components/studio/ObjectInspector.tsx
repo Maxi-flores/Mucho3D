@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { Trash2, Copy, Eye, EyeOff } from 'lucide-react'
 import { useSceneStore } from '@/store'
-import { Panel, Button, Input } from '@/components/ui'
+import { Panel, Button } from '@/components/ui'
 import { fadeInUp } from '@/lib/animations'
 
 export function ObjectInspector() {

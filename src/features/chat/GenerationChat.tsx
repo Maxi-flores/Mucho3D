@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Send } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 import { usePromptSession } from '@/hooks/usePromptSession'
-import { ChatMessage } from '@/types'
 
 interface GenerationChatProps {
   projectId: string

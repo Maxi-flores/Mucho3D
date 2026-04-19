@@ -21,7 +21,7 @@ export function ProductDetail() {
   }
 
   const handleAddToCart = () => {
-    addToCart(selectedProduct.id, quantity)
+    addToCart(selectedProduct, quantity)
     handleClose()
   }
 

@@ -25,7 +25,7 @@ export function ProductCard({ product, size = '1x1' }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation()
-    addToCart(product.id)
+    addToCart(product)
   }
 
   return (

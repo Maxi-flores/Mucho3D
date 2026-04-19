@@ -6,12 +6,10 @@ import {
   OAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  AuthError,
   User as FirebaseUser,
 } from 'firebase/auth'
 import {
   getFirebaseAuth,
-  isFirebaseConfigured,
 } from '@/lib/firebase'
 import { User } from '@/types'
 
@@ -75,9 +73,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null)
       }
       setLoading(false)
-    }, (err: AuthError) => {
-      console.error('Auth state change error:', err)
-      setError(err.message)
+    }, (err) => {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error('Auth state change error:', errorMessage)
+      setError(errorMessage)
       setLoading(false)
     })
 
@@ -103,9 +102,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await signInWithEmailAndPassword(auth, email, password)
       setUser(firebaseUserToAppUser(result.user))
     } catch (err) {
-      const authError = err as AuthError
-      setError(authError.message)
-      throw authError
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      setError(errorMessage)
+      throw err
     }
   }
 
@@ -129,9 +128,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await signInWithPopup(auth, provider)
       setUser(firebaseUserToAppUser(result.user))
     } catch (err) {
-      const authError = err as AuthError
-      setError(authError.message)
-      throw authError
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      setError(errorMessage)
+      throw err
     }
   }
 
@@ -158,9 +157,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await signInWithPopup(auth, provider)
       setUser(firebaseUserToAppUser(result.user))
     } catch (err) {
-      const authError = err as AuthError
-      setError(authError.message)
-      throw authError
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      setError(errorMessage)
+      throw err
     }
   }
 
@@ -178,9 +177,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await firebaseSignOut(auth)
       setUser(null)
     } catch (err) {
-      const authError = err as AuthError
-      setError(authError.message)
-      throw authError
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      setError(errorMessage)
+      throw err
     }
   }
 
