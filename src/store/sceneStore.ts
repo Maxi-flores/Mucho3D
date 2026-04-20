@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { SceneObject, CameraState, SceneStats } from '@/types'
+import type { SnapshotDoc } from '@/services/firestore'
 
 interface SceneState {
   // Scene objects
@@ -11,6 +12,13 @@ interface SceneState {
   duplicateObject: (id: string) => void
   updateObject: (id: string, updates: Partial<SceneObject>) => void
   selectObject: (id: string | null) => void
+
+  // Snapshots
+  snapshots: SnapshotDoc[]
+  isLoadingSnapshots: boolean
+  setSnapshots: (snapshots: SnapshotDoc[]) => void
+  setIsLoadingSnapshots: (isLoading: boolean) => void
+  addSnapshot: (snapshot: SnapshotDoc) => void
 
   // Camera
   camera: CameraState
@@ -91,6 +99,14 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       ),
     })),
   selectObject: (id) => set({ selectedObjectId: id }),
+
+  // Snapshots
+  snapshots: [],
+  isLoadingSnapshots: false,
+  setSnapshots: (snapshots) => set({ snapshots }),
+  setIsLoadingSnapshots: (isLoading) => set({ isLoadingSnapshots: isLoading }),
+  addSnapshot: (snapshot) =>
+    set((state) => ({ snapshots: [snapshot, ...state.snapshots] })),
 
   // Camera
   camera: {
