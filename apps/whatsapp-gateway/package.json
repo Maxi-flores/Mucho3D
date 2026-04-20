@@ -1,0 +1,31 @@
+{
+  "name": "mucho3d-whatsapp-gateway",
+  "version": "1.0.0",
+  "description": "WhatsApp Gateway for Mucho3D - Routes prompts to proxy server",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.4.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

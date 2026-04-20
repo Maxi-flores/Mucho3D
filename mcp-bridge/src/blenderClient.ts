@@ -3,6 +3,16 @@ export interface BlenderWorkerResult {
   result: unknown
   logs: string[]
   error: string | null
+  snapshot?: {
+    filename: string
+    path: string
+    base64: string
+    format: string
+    width: number
+    height: number
+    size: number
+    timestamp: number
+  }
 }
 
 const BLENDER_WORKER_URL = process.env.BLENDER_WORKER_URL || 'http://localhost:7860'

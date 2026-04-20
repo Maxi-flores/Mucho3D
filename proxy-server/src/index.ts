@@ -6,6 +6,8 @@ import { planRouter } from './routes/plan'
 import { healthRouter } from './routes/health'
 import { modelsRouter } from './routes/models'
 import { mcpRouter } from './routes/mcp'
+import { whatsappRouter } from './routes/whatsapp'
+import { snapshotRouter } from './routes/snapshot'
 
 config()
 
@@ -29,6 +31,8 @@ app.use('/api/generate-plan', planRouter)
 app.use('/api/health', healthRouter)
 app.use('/api/models', modelsRouter)
 app.use('/api/mcp', mcpRouter)
+app.use('/api/whatsapp', whatsappRouter)
+app.use('/api/snapshot', snapshotRouter)
 
 // Health check endpoint
 app.get('/health', (req, res) => {

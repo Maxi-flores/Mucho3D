@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # Frontend - React + Vite
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://proxy-server:8787
+      - VITE_MCP_BRIDGE_URL=http://mcp-bridge:8790
+      - VITE_FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - VITE_FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - VITE_FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - VITE_FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - VITE_FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
+      - VITE_FIREBASE_APP_ID=${FIREBASE_APP_ID}
+      - VITE_FIREBASE_MEASUREMENT_ID=${FIREBASE_MEASUREMENT_ID}
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    depends_on:
+      - proxy-server
+    networks:
+      - mucho3d-network
+
+  # Proxy Server - Express
+  proxy-server:
+    build:
+      context: ./proxy-server
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - MCP_BRIDGE_URL=http://mcp-bridge:8790
+      - BLENDER_WORKER_URL=http://blender-worker:8788
+      - FRONTEND_URL=http://frontend:5173
+      - NODE_ENV=production
+    volumes:
+      - ./proxy-server/src:/app/src
+    depends_on:
+      - mcp-bridge
+    networks:
+      - mucho3d-network
+
+  # MCP Bridge - Express + Tool Registry
+  mcp-bridge:
+    build:
+      context: ./mcp-bridge
+      dockerfile: Dockerfile
+    ports:
+      - "8790:8790"
+    environment:
+      - PORT=8790
+      - BLENDER_WORKER_URL=http://blender-worker:8788
+      - NODE_ENV=production
+    volumes:
+      - ./mcp-bridge/src:/app/src
+    depends_on:
+      - blender-worker
+    networks:
+      - mucho3d-network
+
+  # Blender Worker - FastAPI + Blender
+  blender-worker:
+    build:
+      context: ./apps/blender-worker
+      dockerfile: Dockerfile
+    ports:
+      - "8788:8788"
+    environment:
+      - BLENDER_WORKER_PORT=8788
+      - BLENDER_WORKER_EXPORT_DIR=/app/exports
+      - BLENDER_WORKER_SNAPSHOT_DIR=/app/snapshots
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./apps/blender-worker/exports:/app/exports
+      - ./apps/blender-worker/snapshots:/app/snapshots
+    networks:
+      - mucho3d-network
+
+  # WhatsApp Gateway - Express + whatsapp-web.js
+  whatsapp-gateway:
+    build:
+      context: ./apps/whatsapp-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8791:8791"
+    environment:
+      - WHATSAPP_GATEWAY_PORT=8791
+      - PROXY_SERVER_URL=http://proxy-server:8787
+      - WHATSAPP_ADMIN_PHONE=${WHATSAPP_ADMIN_PHONE}
+      - NODE_ENV=production
+    volumes:
+      - ./apps/whatsapp-gateway/.wwebjs_auth:/app/.wwebjs_auth
+      - ./apps/whatsapp-gateway/src:/app/src
+    depends_on:
+      - proxy-server
+    networks:
+      - mucho3d-network
+    stdin_open: true
+    tty: true
+
+networks:
+  mucho3d-network:
+    driver: bridge
+
+volumes:
+  blender-exports:
+  blender-snapshots:
+  whatsapp-auth:
