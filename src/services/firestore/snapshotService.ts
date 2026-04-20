@@ -12,9 +12,11 @@ import {
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore'
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase'
+import { ref, uploadString, getDownloadURL } from 'firebase/storage'
+import { getFirebaseDb, getFirebaseStorage, isFirebaseConfigured } from '@/lib/firebase'
 
 const db = getFirebaseDb()
+const storage = getFirebaseStorage()
 
 export interface SnapshotDoc {
   id: string
@@ -42,8 +44,39 @@ export interface SnapshotDoc {
 }
 
 /**
+ * Upload a snapshot image to Firebase Storage
+ * @param base64Data - Base64 encoded image data (without data:image prefix)
+ * @param filename - Name of the file
+ * @param projectId - Project ID for organizing storage
+ * @returns Download URL of the uploaded image
+ */
+async function uploadSnapshotToStorage(
+  base64Data: string,
+  filename: string,
+  projectId: string
+): Promise<string> {
+  if (!isFirebaseConfigured() || !storage) {
+    throw new Error('Firebase Storage is not configured')
+  }
+
+  // Create a reference to the storage location
+  const storageRef = ref(storage, `snapshots/${projectId}/${filename}`)
+
+  // Upload the base64 string to Firebase Storage
+  // uploadString automatically handles the data:image/png;base64, prefix
+  const snapshot = await uploadString(storageRef, base64Data, 'base64', {
+    contentType: 'image/png',
+  })
+
+  // Get the download URL
+  const downloadURL = await getDownloadURL(snapshot.ref)
+  return downloadURL
+}
+
+/**
  * Save a snapshot to Firestore
  * Called by Blender Worker after capturing a snapshot
+ * If base64Data is provided, uploads to Firebase Storage and saves downloadURL
  */
 export async function saveSnapshot(snapshotData: {
   projectId: string
@@ -77,12 +110,44 @@ export async function saveSnapshot(snapshotData: {
     }
   }
 
-  const snapshotsCollection = collection(db, 'snapshots')
-  const docRef = await addDoc(snapshotsCollection, {
-    ...snapshotData,
+  let downloadURL: string | undefined = snapshotData.fileUrl
+
+  // If base64Data is provided and no fileUrl exists, upload to Storage
+  if (snapshotData.base64Data && !snapshotData.fileUrl) {
+    try {
+      downloadURL = await uploadSnapshotToStorage(
+        snapshotData.base64Data,
+        snapshotData.filename,
+        snapshotData.projectId
+      )
+    } catch (error) {
+      console.error('Failed to upload snapshot to Storage:', error)
+      // Continue saving to Firestore even if Storage upload fails
+      // Fall back to base64Data if needed
+    }
+  }
+
+  // Prepare the document data - exclude base64Data to save Firestore costs
+  const docData = {
+    projectId: snapshotData.projectId,
+    generationId: snapshotData.generationId,
+    sceneId: snapshotData.sceneId,
+    userId: snapshotData.userId,
+    filename: snapshotData.filename,
+    fileUrl: downloadURL,
+    filePath: snapshotData.filePath,
+    format: snapshotData.format,
+    width: snapshotData.width,
+    height: snapshotData.height,
+    size: snapshotData.size,
+    timestamp: snapshotData.timestamp,
+    metadata: snapshotData.metadata,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  })
+  }
+
+  const snapshotsCollection = collection(db, 'snapshots')
+  const docRef = await addDoc(snapshotsCollection, docData)
 
   const docSnap = await getDoc(docRef)
   return { id: docRef.id, ...docSnap.data() } as SnapshotDoc
