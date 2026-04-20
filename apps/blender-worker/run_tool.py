@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import math
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ Vector3 = tuple[float, float, float]
 ALLOWED_TOOLS = {"create_primitive", "transform_object", "apply_material", "export_scene"}
 ALLOWED_PRIMITIVES = {"box", "cube", "sphere", "cylinder"}
 EXPORT_DIR = Path(os.environ.get("BLENDER_WORKER_EXPORT_DIR", Path.cwd() / "exports"))
+SNAPSHOT_DIR = Path(os.environ.get("BLENDER_WORKER_SNAPSHOT_DIR", Path.cwd() / "snapshots"))
 
 
 def execute_tool(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -228,3 +230,65 @@ def object_to_result(obj, object_id: str, primitive_type: str) -> dict[str, Any]
             "scale": list(obj.scale),
         },
     }
+
+
+def capture_viewport_snapshot() -> dict[str, Any]:
+    """
+    Capture a snapshot of the current Blender viewport.
+    Returns a dictionary with the snapshot data (base64 encoded) and metadata.
+    """
+    if bpy is None:
+        raise RuntimeError("Blender bpy module is not available")
+
+    # Ensure snapshot directory exists
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    import time
+    timestamp = int(time.time() * 1000)
+    snapshot_filename = f"snapshot_{timestamp}.png"
+    snapshot_path = SNAPSHOT_DIR / snapshot_filename
+
+    # Store original render settings
+    scene = bpy.context.scene
+    original_filepath = scene.render.filepath
+    original_resolution_x = scene.render.resolution_x
+    original_resolution_y = scene.render.resolution_y
+    original_file_format = scene.render.image_settings.file_format
+
+    try:
+        # Configure render settings for snapshot
+        scene.render.filepath = str(snapshot_path)
+        scene.render.resolution_x = 1920
+        scene.render.resolution_y = 1080
+        scene.render.image_settings.file_format = 'PNG'
+        scene.render.image_settings.color_mode = 'RGBA'
+
+        # Render the current viewport
+        bpy.ops.render.render(write_still=True)
+
+        # Read the rendered image and encode to base64
+        with open(snapshot_path, 'rb') as f:
+            image_data = f.read()
+            base64_data = base64.b64encode(image_data).decode('utf-8')
+
+        # Get file size
+        file_size = len(image_data)
+
+        return {
+            "filename": snapshot_filename,
+            "path": str(snapshot_path),
+            "base64": base64_data,
+            "format": "png",
+            "width": 1920,
+            "height": 1080,
+            "size": file_size,
+            "timestamp": timestamp
+        }
+
+    finally:
+        # Restore original render settings
+        scene.render.filepath = original_filepath
+        scene.render.resolution_x = original_resolution_x
+        scene.render.resolution_y = original_resolution_y
+        scene.render.image_settings.file_format = original_file_format
