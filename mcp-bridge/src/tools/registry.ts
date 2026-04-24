@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { executeInBlender } from '../blenderClient'
+import { callBlender } from '../blenderClient'
 
 const Vector3Schema = z.tuple([
   z.number().finite().safe().min(-1000).max(1000),
@@ -65,6 +65,17 @@ export interface ToolDefinition {
   description: string
   inputSchema: z.ZodTypeAny
   executeLocal: (payload: unknown, context: ToolExecutionContext) => ToolExecutionResult
+}
+
+interface CreatePrimitiveInput {
+  id?: string
+  name?: string
+  type?: z.infer<typeof PrimitiveTypeSchema>
+  primitiveType?: z.infer<typeof PrimitiveTypeSchema>
+  position: Vector3
+  scale: Vector3
+  rotation: Vector3
+  color: string
 }
 
 function normalizePrimitiveType(type: z.infer<typeof PrimitiveTypeSchema>): 'box' | 'sphere' | 'cylinder' {
@@ -159,6 +170,28 @@ function stableVectorHash(position: Vector3, scale: Vector3): string {
     .join('_')
 }
 
+function buildCreatePrimitiveResult(
+  input: CreatePrimitiveInput,
+  blender: unknown
+): ToolExecutionResult {
+  const primitiveType = normalizePrimitiveType((input.primitiveType || input.type)!)
+  const position = input.position as Vector3
+  const scale = input.scale as Vector3
+  const rotation = input.rotation as Vector3
+  const objectId = input.id || `obj_${primitiveType}_${stableVectorHash(position, scale)}`
+  const name = input.name || `${primitiveType}_${objectId}`
+
+  return {
+    result: {
+      objectId,
+      objectType: primitiveType,
+      name,
+      blender,
+    },
+    logs: [`Created ${primitiveType} primitive ${objectId} via Blender bridge`],
+  }
+}
+
 export const toolRegistry = new Map<string, ToolDefinition>([
   [
     'create_primitive',
@@ -213,39 +246,29 @@ export async function executeTool(toolName: string, payload: unknown): Promise<T
   const tool = toolRegistry.get(toolName)!
   const validatedPayload = tool.inputSchema.parse(payload)
 
-  try {
-    const blenderResult = await executeInBlender(toolName, validatedPayload)
-    if (blenderResult.success) {
-      return {
-        result: blenderResult.result,
-        logs: [...blenderResult.logs, `Executed ${toolName} via Blender worker`],
-      }
+  if (toolName === 'create_primitive') {
+    const input = validatedPayload as CreatePrimitiveInput
+    const blenderPayload = {
+      type: input.primitiveType || input.type,
     }
-
-    return {
-      ...tool.executeLocal(validatedPayload, {
-        now: () => new Date(0),
-      }),
-      logs: [
-        ...(blenderResult.logs || []),
-        `Blender worker rejected ${toolName}: ${blenderResult.error || 'unknown error'}`,
-        `Fell back to local execution for ${toolName}`,
-      ],
-    }
-  } catch (error) {
-    const fallback = tool.executeLocal(validatedPayload, {
-      now: () => new Date(0),
+    const blenderResponse = await callBlender(toolName, {
+      ...blenderPayload,
     })
+    const result = buildCreatePrimitiveResult(input, blenderResponse.parsed)
 
     return {
-      result: fallback.result,
+      result: result.result,
       logs: [
-        `Blender worker unavailable for ${toolName}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        ...fallback.logs,
-        `Fell back to local execution for ${toolName}`,
+        ...result.logs,
+        `Sent ${toolName} to Blender socket`,
+        `Blender raw response: ${blenderResponse.raw || '<empty>'}`,
       ],
     }
   }
+
+  return tool.executeLocal(validatedPayload, {
+    now: () => new Date(0),
+  })
 }
 
 export function executeToolLocal(toolName: string, payload: unknown): ToolExecutionResult {

@@ -2,8 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
+import { ChatInterface } from '@/components/ai'
 import { Tabs, TabsContent, TabsList, TabsTrigger, Button } from '@/components/ui'
-import { GenerationChat } from '@/features/chat/GenerationChat'
 import { useProject, useGenerations } from '@/hooks'
 import { fadeInUp } from '@/lib/animations'
 
@@ -194,7 +194,7 @@ export function ProjectDetail() {
             <TabsContent value="chat" className="space-y-6 mt-6">
               {projectId ? (
                 <div className="h-[600px]">
-                  <GenerationChat projectId={projectId} />
+                  <ChatInterface initialMode="chat" title="Project Assistant" className="h-full" />
                 </div>
               ) : (
                 <div className="text-center py-8 text-white/60">

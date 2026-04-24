@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Package, Boxes, Zap, Plus } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
 import { Scene3D, EngineeringGrid, WireframeMesh, CameraController, Lights, FloatingHUD } from '@/components/3d'
-import { CommandPalette } from '@/components/ai'
+import { ChatInterface, CommandPalette } from '@/components/ai'
 import { Panel, Badge, Button } from '@/components/ui'
 import { useProjects } from '@/hooks'
 import { useAuth } from '@/hooks'
@@ -211,6 +211,14 @@ export function Dashboard() {
               </div>
             )}
           </Panel>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <ChatInterface initialMode="dashboard" title="Dashboard Assistant" className="h-[520px]" />
         </motion.div>
       </div>
     </DashboardLayout>

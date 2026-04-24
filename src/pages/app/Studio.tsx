@@ -4,10 +4,9 @@ import { useState } from 'react'
 import { Play, Pause, RotateCcw, Download, Save, MessageSquare } from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
 import { Scene3D, EngineeringGrid, WireframeMesh, CameraController, Lights, FloatingHUD, CameraTracker } from '@/components/3d'
-import { CommandPalette } from '@/components/ai'
+import { ChatInterface, CommandPalette } from '@/components/ai'
 import { ObjectInspector, ObjectList } from '@/components/studio'
 import { Panel, Button, Badge } from '@/components/ui'
-import { GenerationChat } from '@/features/chat/GenerationChat'
 import { useSceneStore } from '@/store'
 import { useUIStore } from '@/store'
 import { useAuth } from '@/hooks'
@@ -251,7 +250,7 @@ export function Studio() {
               {/* Chat Panel */}
               {projectId && showChat && (
                 <div className="h-[600px]">
-                  <GenerationChat projectId={projectId} />
+                  <ChatInterface initialMode="studio" title="Studio Assistant" className="h-full" />
                 </div>
               )}
             </div>

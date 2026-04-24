@@ -1,6 +1,7 @@
 const PROXY_API_URL = import.meta.env.VITE_PROXY_API_URL || 'http://localhost:8787'
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434'
-const DEFAULT_MODEL = import.meta.env.VITE_OLLAMA_MODEL || 'qwen2.5-coder:latest'
+const DEFAULT_MODEL = import.meta.env.VITE_OLLAMA_MODEL || 'qwen3:8b'
+const FALLBACK_MODELS = Array.from(new Set([DEFAULT_MODEL, 'phi3']))
 
 /**
  * Ollama service for AI scene planning
@@ -31,6 +32,18 @@ export interface OllamaGenerateResponse {
   eval_duration?: number
 }
 
+export type ChatServiceResponse =
+  | {
+      type: 'text'
+      message: string
+    }
+  | {
+      type: 'tool_result'
+      tool: string
+      result: unknown
+      logs: string[]
+    }
+
 /**
  * Check if Ollama is available via proxy
  */
@@ -54,12 +67,13 @@ export async function getAvailableModels(): Promise<string[]> {
   try {
     const response = await fetch(`${PROXY_API_URL}/api/models`)
     if (!response.ok) {
-      return [DEFAULT_MODEL]
+      return FALLBACK_MODELS
     }
     const data = (await response.json()) as { models?: Array<{ name: string }> }
-    return data.models?.map((m) => m.name) || [DEFAULT_MODEL]
+    const discoveredModels = data.models?.map((m) => m.name) || []
+    return Array.from(new Set([...discoveredModels, ...FALLBACK_MODELS]))
   } catch {
-    return [DEFAULT_MODEL]
+    return FALLBACK_MODELS
   }
 }
 
@@ -149,7 +163,7 @@ export async function chat(
   signal?: AbortSignal
 ): Promise<{
   success: boolean
-  content?: string
+  data?: ChatServiceResponse
   error?: string
 }> {
   try {
@@ -159,7 +173,6 @@ export async function chat(
       body: JSON.stringify({
         messages,
         model,
-        stream: false,
       }),
       signal,
     })
@@ -171,10 +184,25 @@ export async function chat(
       }
     }
 
-    const data = (await response.json()) as { message?: { content?: string } }
+    const data = (await response.json()) as
+      | { type: 'text'; message: string }
+      | { type: 'tool_result'; tool: string; result: unknown; logs?: string[] }
+
+    if (data.type === 'tool_result') {
+      return {
+        success: true,
+        data: {
+          type: 'tool_result',
+          tool: data.tool,
+          result: data.result,
+          logs: data.logs || [],
+        },
+      }
+    }
+
     return {
       success: true,
-      content: data.message?.content || '',
+      data,
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : 'Chat request failed'
@@ -182,66 +210,6 @@ export async function chat(
       success: false,
       error,
     }
-  }
-}
-
-/**
- * Chat with Ollama via proxy (streaming)
- * Yields response chunks as they arrive
- */
-export async function* chatStream(
-  messages: Array<{ role: string; content: string }>,
-  model: string = DEFAULT_MODEL,
-  signal?: AbortSignal
-): AsyncGenerator<string, void, unknown> {
-  try {
-    const response = await fetch(`${PROXY_API_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages,
-        model,
-        stream: true,
-      }),
-      signal,
-    })
-
-    if (!response.ok) {
-      throw new Error(`Chat stream failed: ${response.status} ${response.statusText}`)
-    }
-
-    const reader = response.body?.getReader()
-    if (!reader) throw new Error('No response body')
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const jsonStr = line.slice(6)
-          if (jsonStr === '[DONE]') return
-
-          try {
-            const json = JSON.parse(jsonStr) as { message?: { content?: string } }
-            const content = json.message?.content || ''
-            if (content) yield content
-          } catch {
-            // Skip invalid JSON
-          }
-        }
-      }
-    }
-  } catch (err) {
-    const error = err instanceof Error ? err.message : 'Chat stream error'
-    throw new Error(error)
   }
 }
 
