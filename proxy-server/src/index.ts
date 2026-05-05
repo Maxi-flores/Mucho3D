@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { config } from 'dotenv'
+import { initializeFirebase, isFirebaseAvailable } from './lib/firebase'
 import { chatRouter } from './routes/chat'
 import { planRouter } from './routes/plan'
 import { healthRouter } from './routes/health'
@@ -9,6 +10,9 @@ import { mcpRouter } from './routes/mcp'
 import { blenderJobsRouter } from './routes/blenderJobs'
 
 config()
+
+// Initialize Firebase for job persistence
+initializeFirebase()
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '8787', 10)
@@ -40,6 +44,7 @@ app.get('/health', (req, res) => {
     service: 'mucho3d-proxy',
     ollamaUrl: OLLAMA_URL,
     mcpBridgeUrl: MCP_BRIDGE_URL || null,
+    firebaseAvailable: isFirebaseAvailable(),
   })
 })
 

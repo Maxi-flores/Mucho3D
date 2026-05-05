@@ -37,7 +37,9 @@ blenderJobsRouter.post('/', async (req: Request, res: Response) => {
     } else {
       // In local mode, queue for actual Blender execution
       // TODO: implement real Blender execution
-      appendJobLog(jobId, 'Queued for Blender execution')
+      appendJobLog(jobId, 'Queued for Blender execution').catch(error => {
+        console.error('[blenderJobs] Failed to log job queued:', error)
+      })
     }
 
     res.json({
@@ -59,7 +61,7 @@ blenderJobsRouter.post('/', async (req: Request, res: Response) => {
 blenderJobsRouter.get('/:jobId', async (req: Request, res: Response) => {
   try {
     const { jobId } = req.params
-    const job = getJob(jobId)
+    const job = await getJob(jobId)
 
     if (!job) {
       res.status(404).json({ error: 'Job not found' })
@@ -106,7 +108,7 @@ blenderJobsRouter.get('/:jobId', async (req: Request, res: Response) => {
 blenderJobsRouter.post('/:jobId/cancel', async (req: Request, res: Response) => {
   try {
     const { jobId } = req.params
-    const job = cancelJob(jobId)
+    const job = await cancelJob(jobId)
 
     if (!job) {
       res.status(404).json({ error: 'Job not found' })
@@ -123,7 +125,7 @@ blenderJobsRouter.post('/:jobId/cancel', async (req: Request, res: Response) => 
 })
 
 /**
- * Simulate mock execution for testing
+ * Simulate mock execution for testing (runs in background)
  */
 function simulateMockExecution(jobId: string) {
   const delays = [
@@ -138,26 +140,34 @@ function simulateMockExecution(jobId: string) {
 
   delays.forEach(({ status, ms }) => {
     delaySum += ms
-    setTimeout(() => {
-      updateJobStatus(jobId, status)
-      appendJobLog(jobId, `Stage: ${status}`)
+    setTimeout(async () => {
+      try {
+        await updateJobStatus(jobId, status)
+        await appendJobLog(jobId, `Stage: ${status}`)
+      } catch (error) {
+        console.error(`[mock] Failed to update status for ${jobId}:`, error)
+      }
     }, delaySum)
   })
 
   // Completion
-  setTimeout(() => {
-    const mockArtifacts = [
-      {
-        id: uuidv4(),
-        jobId,
-        format: 'glb',
-        filename: 'scene.glb',
-        size: Math.floor(Math.random() * 5000000) + 100000,
-        createdAt: new Date().toISOString(),
-      },
-    ]
+  setTimeout(async () => {
+    try {
+      const mockArtifacts = [
+        {
+          id: uuidv4(),
+          jobId,
+          format: 'glb',
+          filename: 'scene.glb',
+          size: Math.floor(Math.random() * 5000000) + 100000,
+          createdAt: new Date().toISOString(),
+        },
+      ]
 
-    completeJob(jobId, mockArtifacts)
-    appendJobLog(jobId, 'Mock execution complete')
+      await completeJob(jobId, mockArtifacts)
+      await appendJobLog(jobId, 'Mock execution complete')
+    } catch (error) {
+      console.error(`[mock] Failed to complete job ${jobId}:`, error)
+    }
   }, delaySum + 500)
 }

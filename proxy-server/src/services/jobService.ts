@@ -1,7 +1,9 @@
 /**
- * In-memory job store for generation jobs
- * In production, this would be backed by a database or message queue
+ * Generation job store with Firestore support
+ * Supports both Firestore persistence and in-memory fallback
  */
+
+import { isFirebaseAvailable, getFirestore, generationsCollection } from '../lib/firebase'
 
 export interface GenerationJob {
   id: string
@@ -29,8 +31,8 @@ export interface GenerationJob {
   updatedAt: string
 }
 
-// In-memory store - replace with database in production
-const jobs = new Map<string, GenerationJob>()
+// In-memory fallback
+const inMemoryJobs = new Map<string, GenerationJob>()
 
 export function createJob(
   jobId: string,
@@ -55,22 +57,69 @@ export function createJob(
     updatedAt: now,
   }
 
-  jobs.set(jobId, job)
+  // Persist to Firestore if available
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      db.collection(generationsCollection).doc(jobId).set(job)
+      console.log(`[JobService] Created job ${jobId} in Firestore`)
+    } catch (error) {
+      console.error(`[JobService] Failed to create job in Firestore:`, error)
+      // Fall through to in-memory
+    }
+  }
+
+  // Always keep in in-memory store for fast access
+  inMemoryJobs.set(jobId, job)
   console.log(`[JobService] Created job ${jobId} for project ${projectId}`)
 
   return job
 }
 
-export function getJob(jobId: string): GenerationJob | null {
-  return jobs.get(jobId) || null
+export async function getJob(jobId: string): Promise<GenerationJob | null> {
+  // Check in-memory first (faster)
+  const cached = inMemoryJobs.get(jobId)
+  if (cached) return cached
+
+  // Try Firestore if available
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        const job = doc.data() as GenerationJob
+        // Cache in-memory for future access
+        inMemoryJobs.set(jobId, job)
+        return job
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job from Firestore:`, error)
+    }
+  }
+
+  return null
 }
 
-export function updateJobStatus(
+export async function updateJobStatus(
   jobId: string,
   status: GenerationJob['status'],
   updates?: Partial<GenerationJob>
-): GenerationJob | null {
-  const job = jobs.get(jobId)
+): Promise<GenerationJob | null> {
+  let job = inMemoryJobs.get(jobId)
+
+  // Try Firestore if not in cache
+  if (!job && isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        job = doc.data() as GenerationJob
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job for update:`, error)
+    }
+  }
+
   if (!job) return null
 
   const now = new Date().toISOString()
@@ -82,54 +131,135 @@ export function updateJobStatus(
     updatedAt: now,
   }
 
-  jobs.set(jobId, updated)
+  // Update Firestore
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      await db.collection(generationsCollection).doc(jobId).update({
+        status,
+        updatedAt: now,
+        ...updates,
+      })
+    } catch (error) {
+      console.error(`[JobService] Failed to update job in Firestore:`, error)
+    }
+  }
+
+  // Update in-memory cache
+  inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Updated job ${jobId} status to ${status}`)
 
   return updated
 }
 
-export function appendJobLog(jobId: string, message: string): GenerationJob | null {
-  const job = jobs.get(jobId)
+export async function appendJobLog(jobId: string, message: string): Promise<GenerationJob | null> {
+  let job = inMemoryJobs.get(jobId)
+
+  if (!job && isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        job = doc.data() as GenerationJob
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job for log append:`, error)
+    }
+  }
+
   if (!job) return null
 
   const now = new Date().toISOString()
+  const logEntry = `[${new Date(now).toLocaleTimeString()}] ${message}`
 
   const updated: GenerationJob = {
     ...job,
-    logs: [...job.logs, `[${new Date(now).toLocaleTimeString()}] ${message}`],
+    logs: [...job.logs, logEntry],
     updatedAt: now,
   }
 
-  jobs.set(jobId, updated)
+  // Update Firestore
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      await db.collection(generationsCollection).doc(jobId).update({
+        logs: updated.logs,
+        updatedAt: now,
+      })
+    } catch (error) {
+      console.error(`[JobService] Failed to append log in Firestore:`, error)
+    }
+  }
+
+  inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] ${jobId}: ${message}`)
 
   return updated
 }
 
-export function appendJobError(jobId: string, error: string): GenerationJob | null {
-  const job = jobs.get(jobId)
+export async function appendJobError(jobId: string, errorMsg: string): Promise<GenerationJob | null> {
+  let job = inMemoryJobs.get(jobId)
+
+  if (!job && isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        job = doc.data() as GenerationJob
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job for error append:`, error)
+    }
+  }
+
   if (!job) return null
 
   const now = new Date().toISOString()
 
   const updated: GenerationJob = {
     ...job,
-    errors: [...job.errors, error],
+    errors: [...job.errors, errorMsg],
     updatedAt: now,
   }
 
-  jobs.set(jobId, updated)
-  console.error(`[JobService] ${jobId}: ${error}`)
+  // Update Firestore
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      await db.collection(generationsCollection).doc(jobId).update({
+        errors: updated.errors,
+        updatedAt: now,
+      })
+    } catch (error) {
+      console.error(`[JobService] Failed to append error in Firestore:`, error)
+    }
+  }
+
+  inMemoryJobs.set(jobId, updated)
+  console.error(`[JobService] ${jobId}: ${errorMsg}`)
 
   return updated
 }
 
-export function completeJob(
+export async function completeJob(
   jobId: string,
   artifacts: GenerationJob['artifacts'],
   errors?: string[]
-): GenerationJob | null {
-  const job = jobs.get(jobId)
+): Promise<GenerationJob | null> {
+  let job = inMemoryJobs.get(jobId)
+
+  if (!job && isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        job = doc.data() as GenerationJob
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job for completion:`, error)
+    }
+  }
+
   if (!job) return null
 
   const now = new Date().toISOString()
@@ -145,14 +275,44 @@ export function completeJob(
     updatedAt: now,
   }
 
-  jobs.set(jobId, updated)
+  // Update Firestore
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      await db.collection(generationsCollection).doc(jobId).update({
+        status: updated.status,
+        artifacts,
+        errors: updated.errors,
+        completedAt: now,
+        duration,
+        updatedAt: now,
+      })
+    } catch (error) {
+      console.error(`[JobService] Failed to complete job in Firestore:`, error)
+    }
+  }
+
+  inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Completed job ${jobId} with ${artifacts.length} artifacts`)
 
   return updated
 }
 
-export function cancelJob(jobId: string): GenerationJob | null {
-  const job = jobs.get(jobId)
+export async function cancelJob(jobId: string): Promise<GenerationJob | null> {
+  let job = inMemoryJobs.get(jobId)
+
+  if (!job && isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      const doc = await db.collection(generationsCollection).doc(jobId).get()
+      if (doc.exists) {
+        job = doc.data() as GenerationJob
+      }
+    } catch (error) {
+      console.error(`[JobService] Failed to fetch job for cancellation:`, error)
+    }
+  }
+
   if (!job) return null
 
   if (job.status === 'complete' || job.status === 'cancelled' || job.status === 'failed') {
@@ -167,14 +327,52 @@ export function cancelJob(jobId: string): GenerationJob | null {
     updatedAt: now,
   }
 
-  jobs.set(jobId, updated)
+  // Update Firestore
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      await db.collection(generationsCollection).doc(jobId).update({
+        status: 'cancelled',
+        updatedAt: now,
+      })
+    } catch (error) {
+      console.error(`[JobService] Failed to cancel job in Firestore:`, error)
+    }
+  }
+
+  inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Cancelled job ${jobId}`)
 
   return updated
 }
 
-export function listJobs(projectId?: string): GenerationJob[] {
-  const jobArray = Array.from(jobs.values())
+export async function listJobs(projectId?: string): Promise<GenerationJob[]> {
+  // Try Firestore first for complete data
+  if (isFirebaseAvailable()) {
+    try {
+      const db = getFirestore()
+      let query: any = db.collection(generationsCollection)
+
+      if (projectId) {
+        query = query.where('projectId', '==', projectId)
+      }
+
+      const snapshot = await query.orderBy('createdAt', 'desc').limit(100).get()
+      const jobs: GenerationJob[] = []
+
+      snapshot.forEach((doc: any) => {
+        jobs.push(doc.data() as GenerationJob)
+      })
+
+      return jobs
+    } catch (error) {
+      console.error(`[JobService] Failed to list jobs from Firestore:`, error)
+      // Fall through to in-memory
+    }
+  }
+
+  // Fallback to in-memory
+  const jobArray = Array.from(inMemoryJobs.values())
   if (projectId) {
     return jobArray.filter(j => j.projectId === projectId)
   }
