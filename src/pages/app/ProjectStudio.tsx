@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '@/hooks/useAuth'
+import { useJobStatusRealtime } from '@/hooks/useJobStatusRealtime'
 import { useStudioStore } from '@/store/studioStore'
 import { StudioNode, NodeType } from '@/types/studio'
 import { GenerationJob } from '@/types/generation'
@@ -9,7 +10,7 @@ import { ProjectDoc } from '@/types/firebase'
 import { getProject, saveProjectStudio } from '@/services/firestore'
 import { compileNodesToPrompt, isProjectReadyForExecution, compileNodesToGenerationPlanDraft, validateGenerationPlan } from '@/services/nodeCompiler'
 import { generateScenePlan } from '@/services/ai/ollamaService'
-import { createGenerationJob, pollJobUntilComplete } from '@/services/generationJobService'
+import { createGenerationJob } from '@/services/generationJobService'
 import { v4 as uuidv4 } from 'uuid'
 
 import { StudioHeader } from '@/components/studio/StudioHeader'
@@ -33,6 +34,25 @@ export function ProjectStudio() {
   const [executionError, setExecutionError] = useState<string>()
   const [currentJob, setCurrentJob] = useState<GenerationJob | null>(null)
   const [executionProgress, setExecutionProgress] = useState(0)
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+
+  // Real-time job updates via WebSocket
+  useJobStatusRealtime(currentJobId, (job) => {
+    setCurrentJob(job)
+    // Calculate progress based on status
+    const statusProgress: Record<string, number> = {
+      queued: 0,
+      planning: 20,
+      validating: 40,
+      sending_to_blender: 50,
+      executing_blender: 75,
+      exporting: 90,
+      complete: 100,
+      failed: 100,
+      cancelled: 100,
+    }
+    setExecutionProgress(statusProgress[job.status] ?? 40)
+  })
 
   const nodes = useStudioStore((state) => state.nodes)
   const viewport = useStudioStore((state) => state.viewport)
@@ -127,6 +147,30 @@ export function ProjectStudio() {
       }
     }
   }, [isDirty, saveProject])
+
+  // Handle job completion
+  useEffect(() => {
+    if (!currentJob || !isExecuting) return
+
+    const isTerminal =
+      currentJob.status === 'complete' ||
+      currentJob.status === 'failed' ||
+      currentJob.status === 'cancelled'
+
+    if (!isTerminal) return
+
+    // Job completed
+    if (currentJob.status === 'failed') {
+      setExecutionError(currentJob.errors.join('; ') || 'Job failed')
+      setCurrentPipelineStep('concept')
+    } else if (currentJob.status === 'complete') {
+      setCurrentPipelineStep('complete')
+      setExecutionProgress(100)
+    }
+
+    setIsExecuting(false)
+    setCurrentJobId(null) // Disconnect WebSocket
+  }, [currentJob, isExecuting])
 
   // Handle node addition
   const handleAddNode = (type: NodeType) => {
@@ -223,36 +267,9 @@ export function ProjectStudio() {
 
       const { job, jobId } = jobResult
       setCurrentJob(job)
+      setCurrentJobId(jobId) // Set up WebSocket listener
       console.log('Created job:', jobId)
-
-      // Step 6: Poll job status until completion (non-blocking)
-      const completedJob = await pollJobUntilComplete(
-        jobId,
-        (status, percentage) => {
-          console.log(`Job ${jobId} status:`, status, `${percentage}%`)
-          setExecutionProgress(40 + percentage * 0.6) // 40-100%
-        }
-      )
-
-      if (!completedJob) {
-        setExecutionError('Job timed out')
-        setCurrentPipelineStep('concept')
-        setIsExecuting(false)
-        return
-      }
-
-      setCurrentJob(completedJob)
-
-      // Step 7: Handle completion
-      if (completedJob.status === 'failed') {
-        setExecutionError(completedJob.errors.join('; ') || 'Job failed')
-        setCurrentPipelineStep('concept')
-      } else if (completedJob.status === 'complete') {
-        setCurrentPipelineStep('complete')
-        setExecutionProgress(100)
-      }
-
-      setIsExecuting(false)
+      // Job completion is now handled by the useEffect that watches currentJob
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
       setExecutionError(errorMsg)

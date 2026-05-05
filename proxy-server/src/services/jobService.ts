@@ -4,6 +4,7 @@
  */
 
 import { isFirebaseAvailable, getFirestore, generationsCollection } from '../lib/firebase'
+import { broadcastJobStatus } from '../websocket/jobStatusServer'
 
 export interface GenerationJob {
   id: string
@@ -33,6 +34,17 @@ export interface GenerationJob {
 
 // In-memory fallback
 const inMemoryJobs = new Map<string, GenerationJob>()
+
+/**
+ * Emit WebSocket update for job status change
+ */
+function emitJobUpdate(job: GenerationJob) {
+  try {
+    broadcastJobStatus(job)
+  } catch (error) {
+    console.warn('[JobService] Failed to broadcast job update:', error)
+  }
+}
 
 export function createJob(
   jobId: string,
@@ -149,6 +161,9 @@ export async function updateJobStatus(
   inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Updated job ${jobId} status to ${status}`)
 
+  // Emit WebSocket update
+  emitJobUpdate(updated)
+
   return updated
 }
 
@@ -194,6 +209,9 @@ export async function appendJobLog(jobId: string, message: string): Promise<Gene
   inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] ${jobId}: ${message}`)
 
+  // Emit WebSocket update
+  emitJobUpdate(updated)
+
   return updated
 }
 
@@ -237,6 +255,9 @@ export async function appendJobError(jobId: string, errorMsg: string): Promise<G
 
   inMemoryJobs.set(jobId, updated)
   console.error(`[JobService] ${jobId}: ${errorMsg}`)
+
+  // Emit WebSocket update
+  emitJobUpdate(updated)
 
   return updated
 }
@@ -295,6 +316,9 @@ export async function completeJob(
   inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Completed job ${jobId} with ${artifacts.length} artifacts`)
 
+  // Emit WebSocket update
+  emitJobUpdate(updated)
+
   return updated
 }
 
@@ -342,6 +366,9 @@ export async function cancelJob(jobId: string): Promise<GenerationJob | null> {
 
   inMemoryJobs.set(jobId, updated)
   console.log(`[JobService] Cancelled job ${jobId}`)
+
+  // Emit WebSocket update
+  emitJobUpdate(updated)
 
   return updated
 }
