@@ -1,7 +1,8 @@
-import { Check, ChevronRight } from 'lucide-react'
+import { Check, ChevronRight, Download } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui'
 import { useStudioStore } from '@/store/studioStore'
+import { GenerationJob } from '@/types/generation'
 
 type PipelineStep = 'concept' | 'structure' | 'validated' | 'executing' | 'complete'
 
@@ -9,6 +10,8 @@ interface StudioBottomBarProps {
   currentStep: PipelineStep
   isExecuting: boolean
   executionError?: string
+  executionProgress?: number
+  currentJob?: GenerationJob | null
   onExecute?: () => void
 }
 
@@ -16,6 +19,8 @@ export function StudioBottomBar({
   currentStep,
   isExecuting,
   executionError,
+  executionProgress = 0,
+  currentJob,
   onExecute,
 }: StudioBottomBarProps) {
   const nodes = useStudioStore((state) => state.nodes)
@@ -141,6 +146,58 @@ export function StudioBottomBar({
               : '○ Complete the requirements above to enable execution'}
           </p>
         </div>
+      )}
+
+      {/* Progress bar during execution */}
+      {isExecuting && executionProgress > 0 && (
+        <div className="mt-2">
+          <div className="h-1 bg-black/40 rounded overflow-hidden">
+            <motion.div
+              initial={{ width: '0%' }}
+              animate={{ width: `${executionProgress}%` }}
+              transition={{ duration: 0.3 }}
+              className="h-full bg-gradient-to-r from-blue-500 to-cyan-400"
+            />
+          </div>
+          <p className="text-xs text-white/50 mt-1">{Math.round(executionProgress)}% complete</p>
+        </div>
+      )}
+
+      {/* Job artifacts display */}
+      {currentJob && currentJob.artifacts && currentJob.artifacts.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs font-semibold text-white/70">Generated Artifacts</p>
+          <div className="flex flex-wrap gap-2">
+            {currentJob.artifacts.map((artifact) => (
+              <a
+                key={artifact.id}
+                href={artifact.url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 rounded bg-green-500/10 border border-green-500/50 hover:bg-green-500/20 transition-colors"
+              >
+                <Download className="w-3 h-3 text-green-400" />
+                <span className="text-xs text-green-400">
+                  {artifact.filename} ({artifact.size ? `${(artifact.size / 1024).toFixed(1)}KB` : 'N/A'})
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Job logs */}
+      {currentJob && currentJob.logs && currentJob.logs.length > 0 && currentStep === 'complete' && (
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer text-white/50 hover:text-white/70">
+            Execution logs ({currentJob.logs.length})
+          </summary>
+          <div className="mt-1 p-2 rounded bg-black/40 max-h-32 overflow-y-auto font-mono text-[10px] text-white/40">
+            {currentJob.logs.slice(-10).map((log, i) => (
+              <div key={i}>{log}</div>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   )

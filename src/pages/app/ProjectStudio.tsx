@@ -4,10 +4,12 @@ import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '@/hooks/useAuth'
 import { useStudioStore } from '@/store/studioStore'
 import { StudioNode, NodeType } from '@/types/studio'
+import { GenerationJob } from '@/types/generation'
 import { ProjectDoc } from '@/types/firebase'
 import { getProject, saveProjectStudio } from '@/services/firestore'
-import { compileNodesToPrompt, isProjectReadyForExecution } from '@/services/nodeCompiler'
+import { compileNodesToPrompt, isProjectReadyForExecution, compileNodesToGenerationPlanDraft, validateGenerationPlan } from '@/services/nodeCompiler'
 import { generateScenePlan } from '@/services/ai/ollamaService'
+import { createGenerationJob, pollJobUntilComplete } from '@/services/generationJobService'
 import { v4 as uuidv4 } from 'uuid'
 
 import { StudioHeader } from '@/components/studio/StudioHeader'
@@ -29,6 +31,8 @@ export function ProjectStudio() {
   const [currentPipelineStep, setCurrentPipelineStep] = useState<'concept' | 'structure' | 'validated' | 'executing' | 'complete'>('concept')
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionError, setExecutionError] = useState<string>()
+  const [currentJob, setCurrentJob] = useState<GenerationJob | null>(null)
+  const [executionProgress, setExecutionProgress] = useState(0)
 
   const nodes = useStudioStore((state) => state.nodes)
   const viewport = useStudioStore((state) => state.viewport)
@@ -147,7 +151,7 @@ export function ProjectStudio() {
     // TODO: Implement context menu for adding nodes at cursor position
   }
 
-  // Handle execute pipeline
+  // Handle execute pipeline - real job-based execution
   const handleExecutePipeline = async () => {
     const readiness = isProjectReadyForExecution(nodes)
     if (!readiness.ready) {
@@ -155,33 +159,100 @@ export function ProjectStudio() {
       return
     }
 
+    if (!user) {
+      setExecutionError('User not authenticated')
+      return
+    }
+
     setIsExecuting(true)
     setExecutionError(undefined)
     setCurrentPipelineStep('structure')
+    setExecutionProgress(0)
 
     try {
-      // Compile nodes to prompt
+      // Step 1: Compile nodes to text prompt
       const prompt = compileNodesToPrompt(nodes, project?.name || 'Untitled')
+      console.log('Compiled prompt:', prompt)
 
-      // Send to generation pipeline
+      // Step 2: Generate AI plan from prompt
       setCurrentPipelineStep('validated')
+      setExecutionProgress(20)
 
-      const result = await generateScenePlan(prompt)
+      const planResult = await generateScenePlan(prompt)
 
-      if (!result.success) {
-        setExecutionError(result.error || 'Failed to generate scene plan')
+      if (!planResult.success) {
+        setExecutionError(planResult.error || 'Failed to generate scene plan')
         setCurrentPipelineStep('concept')
+        setIsExecuting(false)
         return
       }
 
-      // TODO: Save generation to Firestore
-      setCurrentPipelineStep('executing')
+      // Step 3: Create structured plan from nodes
+      const structuredPlan = compileNodesToGenerationPlanDraft(
+        nodes,
+        projectId!,
+        project?.name || 'Untitled'
+      )
 
-      // TODO: Wait for execution completion
-      setTimeout(() => {
-        setCurrentPipelineStep('complete')
+      // Step 4: Validate structured plan
+      const validationErrors = validateGenerationPlan(structuredPlan)
+      if (validationErrors.length > 0) {
+        setExecutionError(`Validation failed: ${validationErrors.join('; ')}`)
+        setCurrentPipelineStep('concept')
         setIsExecuting(false)
-      }, 2000)
+        return
+      }
+
+      setCurrentPipelineStep('executing')
+      setExecutionProgress(40)
+
+      // Step 5: Create Blender job
+      const jobResult = await createGenerationJob(
+        projectId!,
+        user.id,
+        prompt,
+        structuredPlan
+      )
+
+      if ('error' in jobResult) {
+        setExecutionError(jobResult.error)
+        setCurrentPipelineStep('concept')
+        setIsExecuting(false)
+        return
+      }
+
+      const { job, jobId } = jobResult
+      setCurrentJob(job)
+      console.log('Created job:', jobId)
+
+      // Step 6: Poll job status until completion (non-blocking)
+      const completedJob = await pollJobUntilComplete(
+        jobId,
+        (status, percentage) => {
+          console.log(`Job ${jobId} status:`, status, `${percentage}%`)
+          setExecutionProgress(40 + percentage * 0.6) // 40-100%
+        }
+      )
+
+      if (!completedJob) {
+        setExecutionError('Job timed out')
+        setCurrentPipelineStep('concept')
+        setIsExecuting(false)
+        return
+      }
+
+      setCurrentJob(completedJob)
+
+      // Step 7: Handle completion
+      if (completedJob.status === 'failed') {
+        setExecutionError(completedJob.errors.join('; ') || 'Job failed')
+        setCurrentPipelineStep('concept')
+      } else if (completedJob.status === 'complete') {
+        setCurrentPipelineStep('complete')
+        setExecutionProgress(100)
+      }
+
+      setIsExecuting(false)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
       setExecutionError(errorMsg)
@@ -255,6 +326,8 @@ export function ProjectStudio() {
         currentStep={currentPipelineStep}
         isExecuting={isExecuting}
         executionError={executionError}
+        executionProgress={executionProgress}
+        currentJob={currentJob}
         onExecute={handleExecutePipeline}
       />
     </div>
