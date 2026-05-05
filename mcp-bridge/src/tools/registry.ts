@@ -1,11 +1,77 @@
 import { z } from 'zod'
 import { callBlender } from '../blenderClient'
 
+// ─────────────────────────────────────────────
+// Shared Schemas
+// ─────────────────────────────────────────────
+
 const Vector3Schema = z.tuple([
   z.number().finite().safe().min(-1000).max(1000),
   z.number().finite().safe().min(-1000).max(1000),
   z.number().finite().safe().min(-1000).max(1000),
 ])
+
+const GenerationPlanSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  title: z.string(),
+  description: z.string(),
+  objects: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      type: z.enum(['box', 'sphere', 'cylinder', 'cone', 'torus', 'plane']),
+      position: Vector3Schema,
+      rotation: Vector3Schema,
+      scale: Vector3Schema,
+      color: z.string().optional(),
+      material: z
+        .object({
+          metallic: z.number().min(0).max(1),
+          roughness: z.number().min(0).max(1),
+          emissive: Vector3Schema.optional(),
+        })
+        .optional(),
+      modifiers: z
+        .array(
+          z.object({
+            type: z.enum(['bevel', 'subdivision', 'solidify', 'array']),
+            params: z.record(z.unknown()),
+          })
+        )
+        .optional(),
+    })
+  ),
+  lights: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.enum(['directional', 'point', 'spot']),
+        position: Vector3Schema,
+        rotation: Vector3Schema.optional(),
+        intensity: z.number(),
+        color: z.string().optional(),
+        energy: z.number().optional(),
+      })
+    )
+    .optional(),
+  camera: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      position: Vector3Schema,
+      target: Vector3Schema,
+      fov: z.number().optional(),
+    })
+    .optional(),
+  units: z.string().optional().default('meters'),
+  scale: z.number().optional().default(1),
+  outputFormat: z.enum(['glb', 'fbx', 'stl']).optional().default('glb'),
+  qualityLevel: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+  constraints: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+})
 
 const ObjectIdSchema = z
   .string()
@@ -176,6 +242,89 @@ registerTool<ImportAssetInput>({
     imported: true,
     blender: blenderResult,
   }),
+})
+
+type ExecutePlanInput = z.infer<typeof GenerationPlanSchema>
+
+const ExecutePlanInputSchema = GenerationPlanSchema.extend({
+  jobId: z.string().optional(),
+  outputDir: z.string().optional(),
+})
+
+type ExecutePlanPayload = z.infer<typeof ExecutePlanInputSchema>
+
+registerTool<ExecutePlanPayload>({
+  name: 'execute_plan',
+  description: 'Execute a complete GenerationPlan in Blender, creating scene objects and exporting.',
+  inputSchema: ExecutePlanInputSchema,
+  buildBlenderPayload: (payload) => ({
+    tool: 'execute_plan',
+    plan: {
+      id: payload.id,
+      projectId: payload.projectId,
+      title: payload.title,
+      description: payload.description,
+      objects: payload.objects,
+      lights: payload.lights,
+      camera: payload.camera,
+      units: payload.units,
+      scale: payload.scale,
+      outputFormat: payload.outputFormat,
+      qualityLevel: payload.qualityLevel,
+      constraints: payload.constraints,
+      tags: payload.tags,
+    },
+    jobId: payload.jobId,
+    outputDir: payload.outputDir,
+  }),
+  mapResult: (payload, blenderResult) => {
+    const result = blenderResult as Record<string, unknown> | null
+
+    return {
+      success: result?.success === true,
+      createdObjects: typeof result?.created_objects === 'number' ? result.created_objects : 0,
+      logs: Array.isArray(result?.logs) ? result.logs : [],
+      errors: Array.isArray(result?.errors) ? result.errors : [],
+      outputFile: typeof result?.output_file === 'string' ? result.output_file : undefined,
+      artifacts: Array.isArray(result?.artifacts)
+        ? (result.artifacts as Array<{ format: string; path: string; size?: number }>)
+        : [],
+      blender: result,
+    }
+  },
+})
+
+const ExportSceneInputSchema = z.object({
+  jobId: z.string().optional(),
+  formats: z.array(z.enum(['glb', 'fbx', 'stl'])).optional().default(['glb']),
+  outputDir: z.string().optional(),
+})
+
+type ExportSceneInput = z.infer<typeof ExportSceneInputSchema>
+
+registerTool<ExportSceneInput>({
+  name: 'export_scene',
+  description: 'Export the current Blender scene to GLB, FBX, or STL format.',
+  inputSchema: ExportSceneInputSchema,
+  buildBlenderPayload: (payload) => ({
+    tool: 'export_scene',
+    formats: payload.formats,
+    outputDir: payload.outputDir,
+    jobId: payload.jobId,
+  }),
+  mapResult: (payload, blenderResult) => {
+    const result = blenderResult as Record<string, unknown> | null
+
+    return {
+      success: result?.success === true,
+      exports: Array.isArray(result?.exports)
+        ? (result.exports as Array<{ format: string; path: string; size?: number }>)
+        : [],
+      logs: Array.isArray(result?.logs) ? result.logs : [],
+      errors: Array.isArray(result?.errors) ? result.errors : [],
+      blender: result,
+    }
+  },
 })
 
 export { registerTool }

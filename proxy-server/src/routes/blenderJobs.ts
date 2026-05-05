@@ -9,7 +9,9 @@ import {
   completeJob,
   cancelJob,
   listJobs,
+  GenerationJob,
 } from '../services/jobService'
+import { executeBlenderPlan, GenerationPlan } from '../services/blenderExecutor'
 
 export const blenderJobsRouter = Router()
 
@@ -31,16 +33,10 @@ blenderJobsRouter.post('/', async (req: Request, res: Response) => {
     const jobId = uuidv4()
     const job = createJob(jobId, projectId, userId, prompt, plan)
 
-    // In mock mode, simulate quick completion
-    if (BLENDER_MODE === 'mock') {
-      simulateMockExecution(jobId)
-    } else {
-      // In local mode, queue for actual Blender execution
-      // TODO: implement real Blender execution
-      appendJobLog(jobId, 'Queued for Blender execution').catch(error => {
-        console.error('[blenderJobs] Failed to log job queued:', error)
-      })
-    }
+    // Start execution in background (don't wait for completion)
+    executeBlenderPlan(jobId, plan as GenerationPlan).catch((error: Error) => {
+      console.error(`[blenderJobs] Execution error for job ${jobId}:`, error.message)
+    })
 
     res.json({
       job,
@@ -124,50 +120,3 @@ blenderJobsRouter.post('/:jobId/cancel', async (req: Request, res: Response) => 
   }
 })
 
-/**
- * Simulate mock execution for testing (runs in background)
- */
-function simulateMockExecution(jobId: string) {
-  const delays = [
-    { status: 'planning' as const, ms: 500 },
-    { status: 'validating' as const, ms: 500 },
-    { status: 'sending_to_blender' as const, ms: 500 },
-    { status: 'executing_blender' as const, ms: 2000 },
-    { status: 'exporting' as const, ms: 1000 },
-  ]
-
-  let delaySum = 0
-
-  delays.forEach(({ status, ms }) => {
-    delaySum += ms
-    setTimeout(async () => {
-      try {
-        await updateJobStatus(jobId, status)
-        await appendJobLog(jobId, `Stage: ${status}`)
-      } catch (error) {
-        console.error(`[mock] Failed to update status for ${jobId}:`, error)
-      }
-    }, delaySum)
-  })
-
-  // Completion
-  setTimeout(async () => {
-    try {
-      const mockArtifacts = [
-        {
-          id: uuidv4(),
-          jobId,
-          format: 'glb',
-          filename: 'scene.glb',
-          size: Math.floor(Math.random() * 5000000) + 100000,
-          createdAt: new Date().toISOString(),
-        },
-      ]
-
-      await completeJob(jobId, mockArtifacts)
-      await appendJobLog(jobId, 'Mock execution complete')
-    } catch (error) {
-      console.error(`[mock] Failed to complete job ${jobId}:`, error)
-    }
-  }, delaySum + 500)
-}

@@ -1,4 +1,4 @@
-import WebSocket, { Server as WebSocketServer } from 'ws'
+import WebSocket, { WebSocketServer } from 'ws'
 import { Server } from 'http'
 import { GenerationJob } from '../services/jobService'
 
