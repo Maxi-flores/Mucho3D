@@ -21,8 +21,8 @@ export function Home() {
   const features = [
     {
       icon: Sparkles,
-      title: 'AI-Driven Generation',
-      description: 'Describe your ideas in natural language. Watch AI create 3D scenes instantly.',
+      title: 'Claude Prompt Optimization',
+      description: 'Natural language intent becomes structured 3D prompts. AI optimizes for production quality.',
     },
     {
       icon: Grid3X3,
@@ -46,8 +46,8 @@ export function Home() {
     },
     {
       icon: Zap,
-      title: 'Local First',
-      description: 'Run on your hardware. Ollama + Blender. Full control.',
+      title: 'Blender MCP Execution',
+      description: 'Execute plans directly in Blender. Real-time feedback. Full asset generation pipeline.',
     },
   ]
 
@@ -102,14 +102,14 @@ export function Home() {
           </div>
 
           <h1 className="text-6xl md:text-7xl font-bold text-white mb-6">
-            Describe Your Ideas.
+            Claude 3D Prompt Builder.
             <br />
-            <span className="text-gradient">Generate 3D.</span>
+            <span className="text-gradient">Production-Ready Prompts.</span>
           </h1>
 
           <p className="text-xl text-white/60 mb-8 max-w-2xl mx-auto">
-            Mucho3D is an AI-assisted 3D generation platform. Turn natural language into professional 3D scenes.
-            Chat-driven workflow. Deterministic execution. Your workspace.
+            Generate production-ready Blender, Houdini & Unity prompts powered by Claude.
+            Optimize your ideas with AI. Execute with precision. Full platform control.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

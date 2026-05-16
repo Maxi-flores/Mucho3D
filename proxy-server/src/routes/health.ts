@@ -10,6 +10,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
     // Check Ollama health
     let ollamaReachable = false
     let mcpBridgeReachable = false
+    let blenderReachable = false
     let models: string[] = []
     let defaultModel = 'qwen2.5-coder:latest'
 
@@ -34,6 +35,19 @@ healthRouter.get('/', async (req: Request, res: Response) => {
           signal: AbortSignal.timeout(5000),
         })
         mcpBridgeReachable = mcpResponse.ok
+
+        // Also check Blender availability via MCP bridge
+        if (mcpBridgeReachable) {
+          try {
+            const blenderResponse = await fetch(`${mcpBridgeUrl}/blender/health`, {
+              signal: AbortSignal.timeout(5000),
+            })
+            const blenderData = await blenderResponse.json()
+            blenderReachable = Boolean(blenderData.ok)
+          } catch {
+            // Blender not reachable
+          }
+        }
       } catch {
         // MCP bridge not reachable
       }
@@ -47,6 +61,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       mcpBridgeReachable,
       mcpBridgeConfigured: Boolean(mcpBridgeUrl),
       mcpBridgeUrl: mcpBridgeUrl || null,
+      blenderReachable,
       models,
       defaultModel,
       status: ollamaReachable ? 'healthy' : 'unhealthy',

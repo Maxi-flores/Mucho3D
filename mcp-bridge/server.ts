@@ -5,6 +5,7 @@ import {
   executeTool,
   listTools as listRegisteredTools,
 } from './src/tools/registry'
+import { isBlenderAvailable } from './src/blenderSocketBridge'
 
 const app = express()
 const PORT = 8790
@@ -25,6 +26,26 @@ app.get('/health', (_req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
   })
+})
+
+app.get('/blender/health', async (_req, res) => {
+  try {
+    const available = await isBlenderAvailable()
+    res.json({
+      ok: available,
+      service: 'blender',
+      status: available ? 'healthy' : 'unreachable',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      service: 'blender',
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
+    })
+  }
 })
 
 app.get('/connections', (_req, res) => {

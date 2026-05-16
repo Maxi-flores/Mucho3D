@@ -1,11 +1,13 @@
 import { Search, User, Settings } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { Logo } from '@/components/shared/Logo'
 import { Button, Tooltip } from '@/components/ui'
 import { useUIStore } from '@/store'
 import { TOPBAR_HEIGHT } from '@/lib/constants'
 
 export function Topbar() {
+  const navigate = useNavigate()
   const openCommandPalette = useUIStore((state) => state.openCommandPalette)
 
   return (
@@ -43,13 +45,21 @@ export function Topbar() {
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
           <Tooltip content="Settings">
-            <Button variant="ghost" size="sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/app/settings')}
+            >
               <Settings size={18} />
             </Button>
           </Tooltip>
 
           <Tooltip content="User Profile">
-            <Button variant="ghost" size="sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/app/settings')}
+            >
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center">
                 <User size={16} />
               </div>

@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { callBlender } from '../blenderClient'
+import {
+  isBlenderAvailable,
+  executeBlenderCommand,
+  buildGenerationPlanPython,
+  buildExportScenePython,
+  BlenderExecutionResult,
+} from '../blenderSocketBridge'
 
 // ─────────────────────────────────────────────
 // Shared Schemas
@@ -346,22 +352,96 @@ export async function executeTool(
 
   const tool = toolRegistry.get(toolName)!
   const validatedPayload = tool.inputSchema.parse(payload)
-  const blenderPayload = tool.buildBlenderPayload(validatedPayload)
 
   console.log(
     '[mcp-tool] -> executing',
-    JSON.stringify({ tool: toolName, payload: blenderPayload })
+    JSON.stringify({ tool: toolName, payload: validatedPayload })
   )
 
-  const blenderResponse = await callBlender(toolName, blenderPayload)
-  const result = tool.mapResult(validatedPayload, blenderResponse.parsed)
+  // Check Blender availability
+  const blenderAvailable = await isBlenderAvailable()
+  if (!blenderAvailable) {
+    throw new Error(
+      'Blender is not available on socket port 9100. Start Blender with: blender --background --python-socket 9100'
+    )
+  }
+
+  let blenderResult: BlenderExecutionResult | null = null
+  const logs: string[] = []
+
+  // Handle special tools that need Python code generation
+  if (toolName === 'execute_plan') {
+    const typedPayload = validatedPayload as ExecutePlanPayload
+    const plan = {
+      id: typedPayload.id,
+      projectId: typedPayload.projectId,
+      title: typedPayload.title,
+      description: typedPayload.description,
+      objects: typedPayload.objects,
+      lights: typedPayload.lights,
+      camera: typedPayload.camera,
+      units: typedPayload.units,
+      scale: typedPayload.scale,
+      outputFormat: typedPayload.outputFormat,
+      qualityLevel: typedPayload.qualityLevel,
+      constraints: typedPayload.constraints,
+      tags: typedPayload.tags,
+    }
+    const pythonCode = buildGenerationPlanPython(plan)
+    logs.push('Generated Python code for plan execution')
+
+    blenderResult = await executeBlenderCommand(pythonCode)
+    logs.push(...blenderResult.logs)
+    if (blenderResult.errors.length > 0) {
+      logs.push(`Errors: ${blenderResult.errors.join(', ')}`)
+    }
+  } else if (toolName === 'export_scene') {
+    const typedPayload = validatedPayload as ExportSceneInput
+    const formats = typedPayload.formats || ['glb']
+    const outputs: Array<{ format: string; path: string; size?: number }> = []
+
+    for (const format of formats) {
+      const outputPath = `${typedPayload.outputDir || '/tmp'}/scene.${format}`
+      const pythonCode = buildExportScenePython(format, outputPath)
+      logs.push(`Generating export script for ${format}`)
+
+      const result = await executeBlenderCommand(pythonCode)
+      logs.push(...result.logs)
+
+      if (result.success && result.output?.output_file) {
+        outputs.push({
+          format,
+          path: result.output.output_file as string,
+        })
+      } else {
+        logs.push(`Export to ${format} failed: ${result.message}`)
+        if (result.errors.length > 0) {
+          logs.push(`Errors: ${result.errors.join(', ')}`)
+        }
+      }
+    }
+
+    // Construct a synthetic result for export_scene
+    blenderResult = {
+      success: outputs.length > 0,
+      message: outputs.length > 0 ? `Exported ${outputs.length} formats` : 'Export failed',
+      logs,
+      errors: [],
+      output: { exports: outputs },
+    }
+  } else {
+    // For other tools, use the blenderPayload approach (future expansion)
+    throw new Error(`Tool ${toolName} is not yet implemented with socket bridge`)
+  }
+
+  if (!blenderResult.success) {
+    throw new Error(`Blender execution failed: ${blenderResult.message}`)
+  }
+
+  const result = tool.mapResult(validatedPayload, blenderResult.output || blenderResult)
 
   return {
     result,
-    logs: [
-      `Validated payload for ${toolName}`,
-      `Sent ${toolName} to Blender`,
-      `Blender raw response: ${blenderResponse.raw || '<empty>'}`,
-    ],
+    logs,
   }
 }

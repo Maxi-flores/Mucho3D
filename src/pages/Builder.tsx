@@ -1,99 +1,204 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Send, RotateCcw, Code, Check, AlertCircle } from 'lucide-react'
+import {
+  Send,
+  RotateCcw,
+  Check,
+  AlertCircle,
+  Copy,
+  Save,
+  Zap,
+  Box,
+  ChevronDown,
+} from 'lucide-react'
 import { DashboardLayout } from '@/components/layout'
-import { Button, Panel } from '@/components/ui'
+import { Button, Panel, Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui'
+import { usePromptBuilderStore } from '@/store/promptBuilderStore'
+import { useUIStore } from '@/store/uiStore'
+import { PRESETS } from '@/data/presets'
 import { generateScenePlan } from '@/services/ai/ollamaService'
-import { parseScenePlan, ScenePlan } from '@/schema/scenePlan'
+import { parseScenePlan } from '@/schema/scenePlan'
 import { compilePlan } from '@/services/execution'
 import { executeMcpToolCalls } from '@/services/mcp/mcpExecutionService'
-import { MCPToolCall } from '@/services/mcp/toolRegistry'
-import { getMcpBridgeStatus } from '@/services/mcpBridgeService'
+import {
+  TargetPlatform,
+  ObjectType,
+  StylePreset,
+  ExportFormat,
+  TopologyQuality,
+  MaterialType,
+  TextureResolution,
+} from '@/types/promptBuilder'
 
-type PipelineStage = 'idle' | 'planning' | 'validating' | 'executing' | 'complete' | 'error'
-
-interface ExecutionResult {
-  status: 'pending' | 'running' | 'complete' | 'error'
-  duration: number
-  outputFile?: string
-  logs: string[]
-  errors?: string[]
-}
-
-interface ToolTimelineEntry {
-  requestId: string
-  tool: string
-  status: 'pending' | 'success' | 'error'
-  duration?: number
-  error?: string
-}
-
-const EXAMPLE_PROMPTS = [
-  'Create a simple cube with blue color',
-  'Build a scene with 3 spheres arranged in a triangle',
-  'Generate a cylindrical tower with metallic material',
-  'Create a scene with a plane and two boxes',
-  'Build a procedural landscape with multiple objects',
+const OBJECT_TYPES: ObjectType[] = [
+  'character',
+  'prop',
+  'environment',
+  'architecture',
+  'vehicle',
+  'abstract',
+  'procedural',
 ]
+const STYLES: StylePreset[] = [
+  'realistic',
+  'stylized',
+  'low-poly',
+  'cinematic',
+  'game-ready',
+  'vfx-ready',
+]
+const PLATFORMS: TargetPlatform[] = ['blender', 'houdini', 'unity', 'multi']
+const EXPORT_FORMATS: ExportFormat[] = ['glb', 'fbx', 'obj', 'usd', 'abc']
+const TOPOLOGY_OPTIONS: TopologyQuality[] = ['low', 'medium', 'high', 'subdiv']
+const TEXTURE_RESOLUTIONS: TextureResolution[] = ['512', '1024', '2048', '4096']
+const MATERIAL_TYPES: MaterialType[] = ['pbr', 'simple', 'procedural']
+
+type BlenderPipelineStage =
+  | 'idle'
+  | 'planning'
+  | 'validating'
+  | 'executing'
+  | 'complete'
+  | 'error'
+
+const CHECKLIST_ITEMS: Record<string, string[]> = {
+  blender: [
+    'Clean topology with appropriate subdivision',
+    'Materials properly assigned and named',
+    'UVs unwrapped and seams hidden',
+    'Normals baked and smooth shading applied',
+    'Origin point centered or at pivot',
+    'Object naming convention followed',
+    'Textures linked or baked',
+    'Lighting setup complete',
+    'Render settings optimized',
+  ],
+  houdini: [
+    'Geometry fully procedural and parameter-driven',
+    'Attributes properly named and semantic',
+    'VEX scripts optimized and commented',
+    'Node network organized in subnets',
+    'HDAs created for reusability',
+    'Simulation stable and convergent',
+    'Export USD with proper hierarchy',
+    'Documentation of parameters complete',
+    'Version control metadata preserved',
+  ],
+  unity: [
+    'Polygon count within budget (< 50k for characters)',
+    'Materials compatible with URP/HDRP',
+    'Colliders and rigidbodies assigned',
+    'LOD groups created if needed',
+    'Scale and unit conventions matched',
+    'Prefab hierarchy organized',
+    'Serialization settings correct',
+    'Import settings optimized',
+    'Performance tested on target device',
+  ],
+}
 
 export function Builder() {
-  const [prompt, setPrompt] = useState('')
-  const [stage, setStage] = useState<PipelineStage>('idle')
-  const [plan, setPlan] = useState<ScenePlan | null>(null)
-  const [toolCalls, setToolCalls] = useState<MCPToolCall[]>([])
-  const [toolTimeline, setToolTimeline] = useState<ToolTimelineEntry[]>([])
-  const [showPlanJson, setShowPlanJson] = useState(false)
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
-  const [execution, setExecution] = useState<ExecutionResult>({
-    status: 'pending',
-    duration: 0,
-    logs: [],
+  const store = usePromptBuilderStore()
+  const { draft } = store
+  const { addToast } = useUIStore()
+
+  const [mcpHealth, setMcpHealth] = useState<'checking' | 'healthy' | 'unhealthy'>(
+    'checking'
+  )
+  const [blenderAvailable, setBlenderAvailable] = useState<'checking' | 'available' | 'unavailable'>(
+    'checking'
+  )
+  const [showBlenderPipeline, setShowBlenderPipeline] = useState(false)
+  const [blenderStage, setBlenderStage] = useState<BlenderPipelineStage>('idle')
+  const [blenderLogs, setBlenderLogs] = useState<string[]>([])
+  const [showCollapsedSections, setShowCollapsedSections] = useState<
+    Record<string, boolean>
+  >({
+    geometry: true,
+    materials: true,
+    animation: false,
+    export: true,
   })
-  const [mcpHealth, setMcpHealth] = useState<'checking' | 'healthy' | 'unhealthy'>('checking')
-  const [isLoading, setIsLoading] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Check MCP health on mount
   useEffect(() => {
-    const checkMcpHealth = async () => {
+    const checkHealth = async () => {
       try {
-        const data = await getMcpBridgeStatus()
-        setMcpHealth(data.reachable ? 'healthy' : 'unhealthy')
+        const response = await fetch(`${import.meta.env.VITE_PROXY_API_URL || 'http://localhost:8787'}/api/health`)
+        const data = (await response.json()) as Record<string, unknown>
+        setMcpHealth(data.mcpBridgeReachable ? 'healthy' : 'unhealthy')
+        setBlenderAvailable(data.blenderReachable ? 'available' : 'unavailable')
       } catch {
         setMcpHealth('unhealthy')
+        setBlenderAvailable('unavailable')
       }
     }
 
-    checkMcpHealth()
-    const interval = setInterval(checkMcpHealth, 10000)
+    checkHealth()
+    const interval = setInterval(checkHealth, 10000)
     return () => clearInterval(interval)
   }, [])
 
-  const handleGenerate = async () => {
-    if (!prompt.trim() || isLoading) return
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(draft.generatedPrompt || '')
+      addToast({
+        type: 'success',
+        title: 'Copied!',
+        description: 'Prompt copied to clipboard',
+      })
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed',
+        description: 'Could not copy to clipboard',
+      })
+    }
+  }
 
-    setIsLoading(true)
-    setStage('planning')
-    setPlan(null)
-    setToolCalls([])
-    setToolTimeline([])
-    setValidationErrors([])
-    setExecution({ status: 'pending', duration: 0, logs: [] })
+  const handleSavePrompt = () => {
+    const finalSpec = {
+      ...draft,
+      title: draft.title || `Prompt ${new Date().toLocaleDateString()}`,
+    }
+    store.loadPreset(finalSpec)
+    store.savePrompt()
+    addToast({
+      type: 'success',
+      title: 'Saved!',
+      description: 'Prompt saved to your library',
+    })
+  }
+
+  const handleExecuteBlender = async () => {
+    if (!draft.userIntent.trim()) return
+
+    if (blenderAvailable !== 'available') {
+      setShowBlenderPipeline(true)
+      setBlenderStage('error')
+      setBlenderLogs([
+        'Blender is not available on socket port 9100',
+        '',
+        'Start Blender with the following command:',
+        'blender --background --python-socket 9100',
+        '',
+        'Or with a specific Blender file:',
+        'blender /path/to/file.blend --background --python-socket 9100',
+      ])
+      return
+    }
+
+    setShowBlenderPipeline(true)
+    setBlenderStage('planning')
+    setBlenderLogs([])
+    abortControllerRef.current = new AbortController()
 
     try {
-      abortControllerRef.current = new AbortController()
-
-      // Step 1: Generate plan
-      const result = await generateScenePlan(prompt)
+      const result = await generateScenePlan(draft.userIntent)
 
       if (!result.success) {
-        setStage('error')
-        setExecution(prev => ({
-          ...prev,
-          status: 'error',
-          errors: [result.error || 'Failed to generate plan'],
-          logs: result.rawResponse ? [result.rawResponse] : [],
-        }))
+        setBlenderStage('error')
+        setBlenderLogs([result.error || 'Failed to generate plan'])
         return
       }
 
@@ -102,45 +207,21 @@ export function Builder() {
         : { success: false, error: 'No plan JSON returned' }
 
       if (!parseResult.success || !parseResult.data) {
-        setStage('error')
-        setValidationErrors([parseResult.error || 'Invalid scene plan'])
-        setExecution(prev => ({
-          ...prev,
-          status: 'error',
-          errors: [parseResult.error || 'Invalid scene plan'],
-          logs: result.rawResponse ? [result.rawResponse] : [],
-        }))
+        setBlenderStage('error')
+        setBlenderLogs([parseResult.error || 'Invalid scene plan'])
         return
       }
 
-      const planData = parseResult.data
-      setPlan(planData)
-      setExecution(prev => ({
-        ...prev,
-        logs: result.rawResponse ? [result.rawResponse] : [],
-      }))
-
-      // Step 2: Validate
-      setStage('validating')
-      const compileResult = compilePlan(planData)
+      setBlenderStage('validating')
+      const compileResult = compilePlan(parseResult.data)
 
       if (!compileResult.success || !compileResult.payload) {
-        const error = compileResult.error || 'Failed to compile MCP tool calls'
-        setValidationErrors([error])
-        setStage('error')
+        setBlenderStage('error')
+        setBlenderLogs([compileResult.error || 'Failed to compile'])
         return
       }
 
-      const compiledToolCalls = compileResult.payload.toolCalls
-      setToolCalls(compiledToolCalls)
-      setToolTimeline(compiledToolCalls.map((call) => ({
-        requestId: call.requestId,
-        tool: call.tool,
-        status: 'pending',
-      })))
-
-      // Step 3: Execute
-      setStage('executing')
+      setBlenderStage('executing')
       const startTime = Date.now()
 
       const executionResult = await executeMcpToolCalls(compileResult.payload, {
@@ -151,76 +232,39 @@ export function Builder() {
       })
 
       const duration = Date.now() - startTime
-      const errors = executionResult.errors || []
-      setToolTimeline((prev) => prev.map((entry) => ({
-        ...entry,
-        status: errors.length > 0 ? 'error' : 'success',
-        duration,
-        error: errors[0],
-      })))
-      setExecution(prev => ({
-        ...prev,
-        status: executionResult.success ? 'complete' : 'error',
-        duration,
-        errors: executionResult.errors,
-        logs: [
-          ...prev.logs,
-          executionResult.summary || `MCP execution completed in ${duration}ms`,
-        ],
-      }))
-
-      setStage(executionResult.success ? 'complete' : 'error')
+      setBlenderLogs([
+        `Execution completed in ${duration}ms`,
+        executionResult.summary || 'Success',
+      ])
+      setBlenderStage(executionResult.success ? 'complete' : 'error')
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-      setStage('error')
-      setExecution(prev => ({
-        ...prev,
-        status: 'error',
-        errors: [errorMsg],
-      }))
-    } finally {
-      setIsLoading(false)
-      abortControllerRef.current = null
+      setBlenderStage('error')
+      setBlenderLogs([errorMsg])
     }
   }
 
-  const handleReset = () => {
-    setPrompt('')
-    setStage('idle')
-    setPlan(null)
-    setToolCalls([])
-    setToolTimeline([])
-    setValidationErrors([])
-    setExecution({ status: 'pending', duration: 0, logs: [] })
-  }
-
-  const handleExamplePrompt = (examplePrompt: string) => {
-    setPrompt(examplePrompt)
-  }
-
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    setIsLoading(false)
-  }
+  const selectedChecklist = CHECKLIST_ITEMS[draft.targetPlatform] || CHECKLIST_ITEMS.blender
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-[calc(100vh-120px)] gap-4">
+      <div className="flex flex-col h-[calc(100vh-120px)]">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex items-center justify-between mb-4"
         >
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">3D Builder</h1>
-            <p className="text-white/60 text-sm">AI-to-Blender generation pipeline</p>
+            <h1 className="text-3xl font-bold text-white mb-1">
+              Claude 3D Prompt Builder
+            </h1>
+            <p className="text-white/60 text-sm">
+              Generate production-ready 3D prompts for Blender, Houdini & Unity
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* MCP Health */}
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/40 border border-white/10">
               {mcpHealth === 'checking' && (
                 <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
@@ -232,15 +276,31 @@ export function Builder() {
                 <AlertCircle className="w-4 h-4 text-red-500" />
               )}
               <span className="text-xs text-white/70 capitalize">
-                MCP: {mcpHealth === 'checking' ? 'Checking...' : mcpHealth}
+                MCP: {mcpHealth}
               </span>
             </div>
+
+            {draft.targetPlatform === 'blender' && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/40 border border-white/10">
+                {blenderAvailable === 'checking' && (
+                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                )}
+                {blenderAvailable === 'available' && (
+                  <Check className="w-4 h-4 text-green-500" />
+                )}
+                {blenderAvailable === 'unavailable' && (
+                  <AlertCircle className="w-4 h-4 text-red-500" />
+                )}
+                <span className="text-xs text-white/70 capitalize">
+                  Blender: {blenderAvailable}
+                </span>
+              </div>
+            )}
 
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleReset}
-              disabled={stage === 'idle' || isLoading}
+              onClick={() => store.clearDraft()}
               className="gap-2"
             >
               <RotateCcw className="w-4 h-4" />
@@ -248,286 +308,514 @@ export function Builder() {
           </div>
         </motion.div>
 
-        {/* Main Content */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 overflow-hidden">
-          {/* Left: Input and Pipeline */}
-          <div className="lg:col-span-2 flex flex-col gap-4 overflow-hidden">
-            {/* Prompt Input */}
+        {/* Main Content - 3 Panel Layout */}
+        <div className="flex-1 grid grid-cols-[280px_1fr_280px] gap-4 overflow-hidden">
+          {/* LEFT PANEL: Controls */}
+          <Panel className="overflow-y-auto bg-black/20 p-4">
+            <h2 className="text-sm font-semibold text-white mb-4">Configuration</h2>
+
+            {/* Platform Selector */}
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-white/70 mb-3">
+                Target Platform
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {PLATFORMS.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() =>
+                      store.updateDraft({ targetPlatform: p })
+                    }
+                    className={`px-3 py-2 rounded text-xs font-medium transition-all ${
+                      draft.targetPlatform === p
+                        ? 'bg-primary text-white shadow-glow'
+                        : 'bg-black/40 text-white/60 hover:bg-black/60'
+                    }`}
+                  >
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Object Type */}
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-white/70 mb-3">
+                Object Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {OBJECT_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => store.updateDraft({ objectType: t })}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      draft.objectType === t
+                        ? 'bg-primary/20 border border-primary text-primary'
+                        : 'bg-black/40 border border-white/10 text-white/60 hover:border-white/20'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Style */}
+            <div className="mb-6">
+              <label className="block text-xs font-semibold text-white/70 mb-3">
+                Style
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {STYLES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => store.updateDraft({ style: s })}
+                    className={`px-2 py-1 rounded text-xs transition-all ${
+                      draft.style === s
+                        ? 'bg-primary text-white'
+                        : 'bg-black/40 text-white/60 hover:bg-black/60'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Collapsible Sections */}
+            {['geometry', 'materials', 'animation', 'export'].map((section) => (
+              <div
+                key={section}
+                className="mb-4 border border-white/10 rounded-lg overflow-hidden bg-black/20"
+              >
+                <button
+                  onClick={() =>
+                    setShowCollapsedSections((s) => ({
+                      ...s,
+                      [section]: !s[section],
+                    }))
+                  }
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-black/40 transition-colors"
+                >
+                  <span className="text-xs font-semibold text-white capitalize">
+                    {section}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-white/60 transition-transform ${
+                      showCollapsedSections[section] ? '' : '-rotate-90'
+                    }`}
+                  />
+                </button>
+
+                {showCollapsedSections[section] && (
+                  <div className="px-3 py-3 border-t border-white/10 space-y-3">
+                    {section === 'geometry' && (
+                      <>
+                        <div>
+                          <label className="block text-xs text-white/60 mb-1">
+                            Scale
+                          </label>
+                          <input
+                            type="text"
+                            value={draft.geometry.scale}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                geometry: {
+                                  ...draft.geometry,
+                                  scale: e.target.value,
+                                },
+                              })
+                            }
+                            className="w-full px-2 py-1 text-xs bg-black/50 border border-white/20 rounded text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/60 mb-1">
+                            Topology
+                          </label>
+                          <select
+                            value={draft.geometry.topologyQuality}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                geometry: {
+                                  ...draft.geometry,
+                                  topologyQuality: e.target.value as TopologyQuality,
+                                },
+                              })
+                            }
+                            className="w-full px-2 py-1 text-xs bg-black/50 border border-white/20 rounded text-white"
+                          >
+                            {TOPOLOGY_OPTIONS.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.geometry.bevels}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                geometry: {
+                                  ...draft.geometry,
+                                  bevels: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded"
+                          />
+                          Bevels
+                        </label>
+                      </>
+                    )}
+
+                    {section === 'materials' && (
+                      <>
+                        <div>
+                          <label className="block text-xs text-white/60 mb-1">
+                            Type
+                          </label>
+                          <div className="flex gap-2">
+                            {MATERIAL_TYPES.map((m) => (
+                              <button
+                                key={m}
+                                onClick={() =>
+                                  store.updateDraft({
+                                    materials: {
+                                      ...draft.materials,
+                                      type: m,
+                                    },
+                                  })
+                                }
+                                className={`flex-1 px-2 py-1 text-xs rounded ${
+                                  draft.materials.type === m
+                                    ? 'bg-primary text-white'
+                                    : 'bg-black/40 text-white/60'
+                                }`}
+                              >
+                                {m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-white/60 mb-1">
+                            Texture Resolution
+                          </label>
+                          <select
+                            value={draft.materials.textureResolution}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                materials: {
+                                  ...draft.materials,
+                                  textureResolution: e.target.value as TextureResolution,
+                                },
+                              })
+                            }
+                            className="w-full px-2 py-1 text-xs bg-black/50 border border-white/20 rounded text-white"
+                          >
+                            {TEXTURE_RESOLUTIONS.map((t) => (
+                              <option key={t} value={t}>
+                                {t}px
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.materials.uvRequired}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                materials: {
+                                  ...draft.materials,
+                                  uvRequired: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded"
+                          />
+                          UVs Required
+                        </label>
+                      </>
+                    )}
+
+                    {section === 'animation' && (
+                      <>
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.animation.required}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                animation: {
+                                  ...draft.animation,
+                                  required: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded"
+                          />
+                          Animation Required
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.animation.rigging}
+                            onChange={(e) =>
+                              store.updateDraft({
+                                animation: {
+                                  ...draft.animation,
+                                  rigging: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded"
+                          />
+                          Rigging
+                        </label>
+                      </>
+                    )}
+
+                    {section === 'export' && (
+                      <div>
+                        <label className="block text-xs text-white/60 mb-2">
+                          Format
+                        </label>
+                        <div className="grid grid-cols-2 gap-1">
+                          {EXPORT_FORMATS.map((f) => (
+                            <button
+                              key={f}
+                              onClick={() =>
+                                store.updateDraft({ exportFormat: f })
+                              }
+                              className={`px-2 py-1 text-xs rounded ${
+                                draft.exportFormat === f
+                                  ? 'bg-primary text-white'
+                                  : 'bg-black/40 text-white/60'
+                              }`}
+                            >
+                              {f.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Panel>
+
+          {/* CENTER PANEL: Prompt Workspace */}
+          <div className="flex flex-col gap-4 overflow-hidden">
+            {/* User Intent Input */}
             <Panel className="p-4 bg-black/20">
               <label className="block text-xs font-semibold text-white/70 mb-2">
-                Describe your scene
+                What do you want to create?
               </label>
               <textarea
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                disabled={isLoading}
-                placeholder="e.g., 'Create a scene with three spheres and a plane...'"
-                className="w-full h-20 px-3 py-2 rounded bg-black/50 border border-white/20 text-white text-sm resize-none focus:outline-none focus:border-white/40 disabled:opacity-50 mb-3"
+                value={draft.userIntent}
+                onChange={(e) => store.updateDraft({ userIntent: e.target.value })}
+                placeholder="Describe your 3D asset: style, purpose, technical requirements..."
+                className="w-full h-16 px-3 py-2 rounded bg-black/50 border border-white/20 text-white text-sm resize-none focus:outline-none focus:border-white/40"
               />
-
-              {stage === 'idle' && (
-                <div className="mb-3">
-                  <p className="text-xs text-white/50 mb-2">Examples:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {EXAMPLE_PROMPTS.map((ex, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleExamplePrompt(ex)}
-                        className="px-2 py-1 text-xs rounded bg-black/40 hover:bg-black/60 border border-white/10 text-white/70 hover:text-white transition-colors"
-                      >
-                        {ex}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                {isLoading ? (
-                  <Button
-                    onClick={handleStop}
-                    className="flex-1 gap-2 bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-400"
-                  >
-                    Stop
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={!prompt.trim()}
-                    className="flex-1 gap-2"
-                  >
-                    <Send className="w-4 h-4" />
-                    Generate
-                  </Button>
-                )}
+              <div className="flex gap-2 mt-3">
+                <Button
+                  onClick={() => store.generatePrompt()}
+                  className="flex-1 gap-2"
+                  disabled={!draft.userIntent.trim()}
+                >
+                  <Send className="w-4 h-4" />
+                  Generate
+                </Button>
+                <Button
+                  onClick={() => store.optimizeWithAI()}
+                  variant="secondary"
+                  className="flex-1 gap-2"
+                  disabled={!draft.userIntent.trim() || store.isOptimizing}
+                >
+                  <Zap className="w-4 h-4" />
+                  Optimize with AI
+                </Button>
               </div>
             </Panel>
 
-            {/* Pipeline Stages */}
-            <Panel className="flex-1 p-4 bg-black/20 overflow-y-auto">
-              <h2 className="text-sm font-semibold text-white mb-3">Pipeline</h2>
+            {/* Prompt Output Tabs */}
+            {draft.generatedPrompt && (
+              <Panel className="flex-1 p-4 bg-black/20 overflow-hidden flex flex-col">
+                <Tabs defaultValue="main">
+                  <TabsList>
+                    <TabsTrigger value="main">Summary</TabsTrigger>
+                    {draft.platformVariants.blender && (
+                      <TabsTrigger value="blender">Blender</TabsTrigger>
+                    )}
+                    {draft.platformVariants.houdini && (
+                      <TabsTrigger value="houdini">Houdini</TabsTrigger>
+                    )}
+                    {draft.platformVariants.unity && (
+                      <TabsTrigger value="unity">Unity</TabsTrigger>
+                    )}
+                  </TabsList>
 
-              <div className="space-y-3">
-                {/* Planning Stage */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    stage === 'planning'
-                      ? 'bg-blue-500/10 border-blue-500/50'
-                      : stage === 'complete' || ['validating', 'executing', 'complete', 'error'].includes(stage)
-                        ? 'bg-green-500/10 border-green-500/50'
-                        : 'bg-black/40 border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {stage === 'planning' && (
-                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    )}
-                    {['validating', 'executing', 'complete'].includes(stage) && (
-                      <Check className="w-4 h-4 text-green-500" />
-                    )}
-                    {stage === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
-                    {!['planning', 'validating', 'executing', 'complete', 'error'].includes(stage) && (
-                      <div className="w-2 h-2 rounded-full bg-white/30" />
-                    )}
-                    <span className="text-sm font-medium text-white">Planning</span>
-                  </div>
-                  {stage === 'planning' && (
-                    <p className="text-xs text-white/60 ml-4">Generating scene plan from prompt...</p>
+                  <TabsContent value="main" className="flex-1 overflow-y-auto mt-3">
+                    <pre className="text-xs bg-black/50 p-3 rounded border border-white/10 text-white/70 whitespace-pre-wrap break-words max-h-64">
+                      {draft.generatedPrompt}
+                    </pre>
+                  </TabsContent>
+
+                  {draft.platformVariants.blender && (
+                    <TabsContent value="blender" className="flex-1 overflow-y-auto mt-3">
+                      <pre className="text-xs bg-black/50 p-3 rounded border border-white/10 text-white/70 whitespace-pre-wrap break-words max-h-64">
+                        {draft.platformVariants.blender}
+                      </pre>
+                    </TabsContent>
                   )}
-                </div>
 
-                {/* Validation Stage */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    stage === 'validating'
-                      ? 'bg-blue-500/10 border-blue-500/50'
-                      : stage === 'complete' || ['executing', 'complete'].includes(stage)
-                        ? 'bg-green-500/10 border-green-500/50'
-                        : stage === 'error' && validationErrors.length > 0
-                          ? 'bg-red-500/10 border-red-500/50'
-                          : 'bg-black/40 border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {stage === 'validating' && (
-                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    )}
-                    {(stage === 'executing' || stage === 'complete') && (
-                      <Check className="w-4 h-4 text-green-500" />
-                    )}
-                    {stage === 'error' && validationErrors.length > 0 && (
-                      <AlertCircle className="w-4 h-4 text-red-500" />
-                    )}
-                    {!['validating', 'executing', 'complete', 'error'].includes(stage) && (
-                      <div className="w-2 h-2 rounded-full bg-white/30" />
-                    )}
-                    <span className="text-sm font-medium text-white">Validation</span>
-                  </div>
-                  {validationErrors.length > 0 && (
-                    <div className="ml-4 mt-2 space-y-1">
-                      {validationErrors.map((error, i) => (
-                        <p key={i} className="text-xs text-red-400">
-                          • {error}
-                        </p>
-                      ))}
-                    </div>
+                  {draft.platformVariants.houdini && (
+                    <TabsContent value="houdini" className="flex-1 overflow-y-auto mt-3">
+                      <pre className="text-xs bg-black/50 p-3 rounded border border-white/10 text-white/70 whitespace-pre-wrap break-words max-h-64">
+                        {draft.platformVariants.houdini}
+                      </pre>
+                    </TabsContent>
                   )}
-                </div>
 
-                {/* Execution Stage */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    stage === 'executing'
-                      ? 'bg-blue-500/10 border-blue-500/50'
-                      : stage === 'complete'
-                        ? 'bg-green-500/10 border-green-500/50'
-                        : execution.status === 'error'
-                          ? 'bg-red-500/10 border-red-500/50'
-                          : 'bg-black/40 border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {stage === 'executing' && (
-                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    )}
-                    {stage === 'complete' && <Check className="w-4 h-4 text-green-500" />}
-                    {execution.status === 'error' && stage === 'error' && (
-                      <AlertCircle className="w-4 h-4 text-red-500" />
-                    )}
-                    {!['executing', 'complete'].includes(stage) && execution.status !== 'error' && (
-                      <div className="w-2 h-2 rounded-full bg-white/30" />
-                    )}
-                    <span className="text-sm font-medium text-white">Execution</span>
-                  </div>
-                  {stage === 'executing' && (
-                    <p className="text-xs text-white/60 ml-4">Executing validated MCP tool calls...</p>
+                  {draft.platformVariants.unity && (
+                    <TabsContent value="unity" className="flex-1 overflow-y-auto mt-3">
+                      <pre className="text-xs bg-black/50 p-3 rounded border border-white/10 text-white/70 whitespace-pre-wrap break-words max-h-64">
+                        {draft.platformVariants.unity}
+                      </pre>
+                    </TabsContent>
                   )}
-                </div>
+                </Tabs>
+              </Panel>
+            )}
 
-                {toolTimeline.length > 0 && (
-                  <div className="p-3 rounded-lg border bg-black/40 border-white/10">
-                    <p className="text-sm font-medium text-white mb-2">Tool Timeline</p>
-                    <div className="space-y-2">
-                      {toolTimeline.map((entry) => (
-                        <div key={entry.requestId} className="flex items-center justify-between gap-3 text-xs">
-                          <span className="text-white/70">{entry.tool}</span>
-                          <span
-                            className={
-                              entry.status === 'success'
-                                ? 'text-green-400'
-                                : entry.status === 'error'
-                                  ? 'text-red-400'
-                                  : 'text-yellow-400'
-                            }
-                          >
-                            {entry.status}
-                            {entry.duration ? ` (${entry.duration}ms)` : ''}
-                          </span>
+            {/* Blender MCP Pipeline */}
+            {draft.targetPlatform === 'blender' && (
+              <Panel className="p-4 bg-black/20">
+                <button
+                  onClick={() => setShowBlenderPipeline(!showBlenderPipeline)}
+                  className="flex items-center gap-2 text-sm font-semibold text-white hover:text-primary transition-colors mb-2"
+                >
+                  <Box className="w-4 h-4" />
+                  Execute in Blender (MCP)
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${
+                      showBlenderPipeline ? '' : '-rotate-90'
+                    }`}
+                  />
+                </button>
+
+                {showBlenderPipeline && (
+                  <div className="mt-3 space-y-2">
+                    <Button
+                      onClick={handleExecuteBlender}
+                      className="w-full gap-2"
+                      disabled={blenderStage !== 'idle' || blenderAvailable !== 'available'}
+                      title={blenderAvailable !== 'available' ? 'Blender is not available. Start Blender with: blender --background --python-socket 9100' : ''}
+                    >
+                      <Zap className="w-4 h-4" />
+                      Execute Pipeline
+                    </Button>
+
+                    {blenderStage !== 'idle' && (
+                      <div className="text-xs space-y-2">
+                        <div className="p-2 rounded bg-black/50 border border-white/10">
+                          <p className="text-white/60">
+                            Status:{' '}
+                            <span className="text-primary capitalize">
+                              {blenderStage}
+                            </span>
+                          </p>
                         </div>
-                      ))}
-                    </div>
+                        {blenderLogs.length > 0 && (
+                          <div className="p-2 rounded bg-black/50 border border-white/10 max-h-32 overflow-y-auto">
+                            {blenderLogs.map((log, i) => (
+                              <p key={i} className="text-white/60">
+                                {log}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            </Panel>
+              </Panel>
+            )}
           </div>
 
-          {/* Right: Preview and Results */}
+          {/* RIGHT PANEL: Actions & Checklist */}
           <div className="flex flex-col gap-4 overflow-hidden">
-            {/* Plan Preview */}
-            {plan && (
-              <Panel className="flex-1 p-4 bg-black/20 overflow-y-auto">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-white">Plan Preview</h3>
-                  <button
-                    onClick={() => setShowPlanJson(!showPlanJson)}
-                    className="p-1 rounded hover:bg-white/10 transition-colors"
+            {/* Action Buttons */}
+            <Panel className="p-4 bg-black/20">
+              <h3 className="text-sm font-semibold text-white mb-3">Actions</h3>
+              <div className="space-y-2">
+                <Button
+                  onClick={handleCopyPrompt}
+                  variant="secondary"
+                  className="w-full gap-2 justify-center"
+                  disabled={!draft.generatedPrompt}
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Prompt
+                </Button>
+                <Button
+                  onClick={handleSavePrompt}
+                  variant="secondary"
+                  className="w-full gap-2 justify-center"
+                  disabled={!draft.generatedPrompt}
+                >
+                  <Save className="w-4 h-4" />
+                  Save Prompt
+                </Button>
+              </div>
+            </Panel>
+
+            {/* Export Checklist */}
+            <Panel className="flex-1 p-4 bg-black/20 overflow-y-auto">
+              <h3 className="text-sm font-semibold text-white mb-3">
+                Export Checklist ({draft.targetPlatform})
+              </h3>
+              <div className="space-y-2">
+                {selectedChecklist.map((item, i) => (
+                  <label
+                    key={i}
+                    className="flex items-start gap-2 text-xs text-white/70 cursor-pointer hover:text-white/90"
                   >
-                    <Code className="w-4 h-4 text-white/60" />
+                    <input
+                      type="checkbox"
+                      className="mt-1 rounded"
+                      defaultChecked={false}
+                    />
+                    <span>{item}</span>
+                  </label>
+                ))}
+              </div>
+            </Panel>
+
+            {/* Presets */}
+            <Panel className="p-4 bg-black/20">
+              <h3 className="text-sm font-semibold text-white mb-3">Presets</h3>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {Object.entries(PRESETS).map(([id, preset]) => (
+                  <button
+                    key={id}
+                    onClick={() => store.loadPreset(preset)}
+                    className="w-full text-left px-2 py-1 text-xs rounded bg-black/40 hover:bg-black/60 text-white/70 hover:text-white transition-colors"
+                  >
+                    {preset.title}
                   </button>
-                </div>
-
-                {showPlanJson ? (
-                  <pre className="text-xs bg-black/50 p-2 rounded border border-white/10 text-white/70 overflow-auto max-h-64">
-                    {JSON.stringify(plan, null, 2)}
-                  </pre>
-                ) : (
-                  <div className="space-y-2 text-xs">
-                    <div>
-                      <p className="text-white/50">Intent</p>
-                      <p className="text-white">{plan.intent}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/50">Objects</p>
-                      <p className="text-white">{plan.objects.length} objects</p>
-                    </div>
-                    <div>
-                      <p className="text-white/50">MCP Tool Calls</p>
-                      <p className="text-white">{toolCalls.length} validated calls</p>
-                    </div>
-                    {plan.metadata?.estimatedComplexity && (
-                      <div>
-                        <p className="text-white/50">Complexity</p>
-                        <p className="text-white">{plan.metadata.estimatedComplexity}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Panel>
-            )}
-
-            {/* Execution Results */}
-            {stage !== 'idle' && (
-              <Panel className="flex-1 p-4 bg-black/20 overflow-y-auto">
-                <h3 className="text-sm font-semibold text-white mb-3">Results</h3>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <p className="text-white/50">Status</p>
-                    <p className={execution.status === 'error' ? 'text-red-400' : execution.status === 'complete' ? 'text-green-400' : 'text-white'}>
-                      {execution.status}
-                    </p>
-                  </div>
-
-                  {execution.duration > 0 && (
-                    <div>
-                      <p className="text-white/50">Duration</p>
-                      <p className="text-white">{execution.duration}ms</p>
-                    </div>
-                  )}
-
-                  {execution.errors && execution.errors.length > 0 && (
-                    <div>
-                      <p className="text-white/50">Errors</p>
-                      <div className="space-y-1 mt-1">
-                        {execution.errors.map((err, i) => (
-                          <p key={i} className="text-red-400">
-                            • {err}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {execution.logs.length > 0 && (
-                    <div>
-                      <p className="text-white/50 mb-1">Logs</p>
-                      <div className="bg-black/50 p-2 rounded border border-white/10 max-h-32 overflow-y-auto">
-                        {execution.logs.map((log, i) => (
-                          <p key={i} className="text-white/60 whitespace-pre-wrap break-words">
-                            {log.substring(0, 200)}
-                            {log.length > 200 ? '...' : ''}
-                          </p>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Panel>
-            )}
+                ))}
+              </div>
+            </Panel>
           </div>
         </div>
       </div>
     </DashboardLayout>
   )
 }
+
