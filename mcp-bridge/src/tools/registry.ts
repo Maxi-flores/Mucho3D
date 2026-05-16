@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { executeInBlender } from '../blenderClient'
+import { callBlender } from '../blenderClient'
+
+// ─────────────────────────────────────────────
+// Shared Schemas
+// ─────────────────────────────────────────────
 
 const Vector3Schema = z.tuple([
   z.number().finite().safe().min(-1000).max(1000),
@@ -7,255 +11,357 @@ const Vector3Schema = z.tuple([
   z.number().finite().safe().min(-1000).max(1000),
 ])
 
-const ObjectIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
-const ColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/)
+const GenerationPlanSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  title: z.string(),
+  description: z.string(),
+  objects: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      type: z.enum(['box', 'sphere', 'cylinder', 'cone', 'torus', 'plane']),
+      position: Vector3Schema,
+      rotation: Vector3Schema,
+      scale: Vector3Schema,
+      color: z.string().optional(),
+      material: z
+        .object({
+          metallic: z.number().min(0).max(1),
+          roughness: z.number().min(0).max(1),
+          emissive: Vector3Schema.optional(),
+        })
+        .optional(),
+      modifiers: z
+        .array(
+          z.object({
+            type: z.enum(['bevel', 'subdivision', 'solidify', 'array']),
+            params: z.record(z.unknown()),
+          })
+        )
+        .optional(),
+    })
+  ),
+  lights: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        type: z.enum(['directional', 'point', 'spot']),
+        position: Vector3Schema,
+        rotation: Vector3Schema.optional(),
+        intensity: z.number(),
+        color: z.string().optional(),
+        energy: z.number().optional(),
+      })
+    )
+    .optional(),
+  camera: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      position: Vector3Schema,
+      target: Vector3Schema,
+      fov: z.number().optional(),
+    })
+    .optional(),
+  units: z.string().optional().default('meters'),
+  scale: z.number().optional().default(1),
+  outputFormat: z.enum(['glb', 'fbx', 'stl']).optional().default('glb'),
+  qualityLevel: z.enum(['low', 'medium', 'high']).optional().default('medium'),
+  constraints: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+})
+
+const ObjectIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/)
 
 const PrimitiveTypeSchema = z.enum(['box', 'cube', 'sphere', 'cylinder'])
 type Vector3 = [number, number, number]
 
-const CreatePrimitiveInputSchema = z.object({
-  id: ObjectIdSchema.optional(),
-  name: z.string().min(1).max(100).optional(),
-  type: PrimitiveTypeSchema.optional(),
-  primitiveType: PrimitiveTypeSchema.optional(),
-  position: Vector3Schema.default([0, 0, 0]),
-  scale: Vector3Schema.default([1, 1, 1]),
-  rotation: Vector3Schema.default([0, 0, 0]),
-  color: ColorSchema.default('#FFFFFF'),
-}).strict().refine(
-  (value) => Boolean(value.type || value.primitiveType),
-  'Either type or primitiveType is required'
-)
+const CreatePrimitiveInputSchema = z
+  .object({
+    id: ObjectIdSchema.optional(),
+    name: z.string().min(1).max(100).optional(),
+    type: PrimitiveTypeSchema.optional(),
+    primitiveType: PrimitiveTypeSchema.optional(),
+    location: Vector3Schema.optional(),
+    position: Vector3Schema.optional(),
+    scale: Vector3Schema.default([1, 1, 1]),
+    rotation: Vector3Schema.default([0, 0, 0]),
+  })
+  .strict()
+  .refine(
+    (value) => Boolean(value.type || value.primitiveType),
+    'Either type or primitiveType is required'
+  )
 
-const TransformObjectInputSchema = z.object({
-  objectId: ObjectIdSchema,
-  position: Vector3Schema.optional(),
-  scale: Vector3Schema.optional(),
-  rotation: Vector3Schema.optional(),
-}).strict().refine(
-  (value) => Boolean(value.position || value.scale || value.rotation),
-  'At least one transform field is required'
-)
+const TransformObjectInputSchema = z
+  .object({
+    objectId: ObjectIdSchema,
+    position: Vector3Schema.optional(),
+    location: Vector3Schema.optional(),
+    scale: Vector3Schema.optional(),
+    rotation: Vector3Schema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      Boolean(value.position || value.location || value.scale || value.rotation),
+    'At least one transform field is required'
+  )
 
-const ApplyMaterialInputSchema = z.object({
-  objectId: ObjectIdSchema,
-  color: ColorSchema.optional(),
-  metallic: z.number().finite().safe().min(0).max(1).default(0),
-  roughness: z.number().finite().safe().min(0).max(1).default(0.5),
-  emissive: ColorSchema.optional(),
-}).strict()
-
-const ExportSceneInputSchema = z.object({
-  format: z.enum(['glb', 'fbx']),
-  filename: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.-]+$/),
-  includeHidden: z.boolean().default(false),
-}).strict()
-
-export interface ToolExecutionContext {
-  now: () => Date
-}
+const ImportAssetInputSchema = z
+  .object({
+    query: z.string().min(1).max(256),
+    objectId: ObjectIdSchema.optional(),
+    source: z.string().min(1).max(512).optional(),
+    location: Vector3Schema.default([0, 0, 0]),
+    scale: Vector3Schema.default([1, 1, 1]),
+    rotation: Vector3Schema.default([0, 0, 0]),
+  })
+  .strict()
 
 export interface ToolExecutionResult {
   result: unknown
   logs: string[]
 }
 
-export interface ToolDefinition {
+export interface ToolDefinition<TPayload = unknown> {
   name: string
   description: string
-  inputSchema: z.ZodTypeAny
-  executeLocal: (payload: unknown, context: ToolExecutionContext) => ToolExecutionResult
+  inputSchema: z.ZodType<TPayload>
+  buildBlenderPayload: (payload: TPayload) => Record<string, unknown>
+  mapResult: (payload: TPayload, blenderResult: unknown) => unknown
 }
 
-function normalizePrimitiveType(type: z.infer<typeof PrimitiveTypeSchema>): 'box' | 'sphere' | 'cylinder' {
+type CreatePrimitiveInput = z.infer<typeof CreatePrimitiveInputSchema>
+type TransformObjectInput = z.infer<typeof TransformObjectInputSchema>
+type ImportAssetInput = z.infer<typeof ImportAssetInputSchema>
+
+const toolRegistry = new Map<string, ToolDefinition>()
+
+function normalizePrimitiveType(
+  type: z.infer<typeof PrimitiveTypeSchema>
+): 'box' | 'sphere' | 'cylinder' {
   return type === 'cube' ? 'box' : type
 }
 
-function createPrimitive(payload: unknown, context: ToolExecutionContext): ToolExecutionResult {
-  const input = CreatePrimitiveInputSchema.parse(payload)
-  const primitiveType = normalizePrimitiveType((input.primitiveType || input.type)!)
-  const position = input.position as Vector3
-  const scale = input.scale as Vector3
-  const rotation = input.rotation as Vector3
-  const objectId = input.id || `obj_${primitiveType}_${stableVectorHash(position, scale)}`
-  const name = input.name || `${primitiveType}_${objectId}`
-
-  const object = {
-    id: objectId,
-    type: primitiveType,
-    position,
-    scale,
-    rotation,
-    color: input.color,
-    transform: {
-      position,
-      scale,
-      rotation,
-    },
-    createdAt: context.now().toISOString(),
-  }
-
-  return {
-    result: {
-      objectId,
-      objectType: primitiveType,
-      name,
-      object,
-    },
-    logs: [`Created ${primitiveType} primitive ${objectId}`],
-  }
-}
-
-function transformObject(payload: unknown): ToolExecutionResult {
-  const input = TransformObjectInputSchema.parse(payload)
-
-  return {
-    result: {
-      objectId: input.objectId,
-      transformed: true,
-      transform: {
-        position: input.position,
-        scale: input.scale,
-        rotation: input.rotation,
-      },
-    },
-    logs: [`Transformed object ${input.objectId}`],
-  }
-}
-
-function applyMaterial(payload: unknown): ToolExecutionResult {
-  const input = ApplyMaterialInputSchema.parse(payload)
-
-  return {
-    result: {
-      objectId: input.objectId,
-      materialApplied: true,
-      material: {
-        color: input.color,
-        metallic: input.metallic,
-        roughness: input.roughness,
-        emissive: input.emissive,
-      },
-    },
-    logs: [`Applied material to ${input.objectId}`],
-  }
-}
-
-function exportScene(payload: unknown): ToolExecutionResult {
-  const input = ExportSceneInputSchema.parse(payload)
-
-  return {
-    result: {
-      format: input.format,
-      path: `/tmp/${input.filename}`,
-    },
-    logs: [`Prepared ${input.format} export ${input.filename}`],
-  }
-}
-
-function stableVectorHash(position: Vector3, scale: Vector3): string {
-  return [...position, ...scale]
+function stableVectorHash(...vectors: Vector3[]): string {
+  return vectors
+    .flat()
     .map((value) => Math.round(value * 1000).toString(36).replace('-', 'm'))
     .join('_')
 }
 
-export const toolRegistry = new Map<string, ToolDefinition>([
-  [
-    'create_primitive',
-    {
-      name: 'create_primitive',
-      description: 'Create a deterministic local primitive scene object.',
-      inputSchema: CreatePrimitiveInputSchema,
-      executeLocal: createPrimitive,
-    },
-  ],
-  [
-    'transform_object',
-    {
-      name: 'transform_object',
-      description: 'Apply a deterministic transform to a local scene object.',
-      inputSchema: TransformObjectInputSchema,
-      executeLocal: transformObject,
-    },
-  ],
-  [
-    'apply_material',
-    {
-      name: 'apply_material',
-      description: 'Apply deterministic material metadata to a local scene object.',
-      inputSchema: ApplyMaterialInputSchema,
-      executeLocal: applyMaterial,
-    },
-  ],
-  [
-    'export_scene',
-    {
-      name: 'export_scene',
-      description: 'Prepare a deterministic local export result.',
-      inputSchema: ExportSceneInputSchema,
-      executeLocal: exportScene,
-    },
-  ],
-])
+function normalizePosition(
+  payload: Pick<CreatePrimitiveInput, 'location' | 'position'>
+): Vector3 {
+  return (payload.location || payload.position || [0, 0, 0]) as Vector3
+}
 
-export function listTools() {
+function normalizeTransformPosition(
+  payload: Pick<TransformObjectInput, 'location' | 'position'>
+): Vector3 | undefined {
+  return (payload.position || payload.location) as Vector3 | undefined
+}
+
+function registerTool<TPayload>(definition: ToolDefinition<TPayload>): void {
+  toolRegistry.set(definition.name, definition as ToolDefinition)
+}
+
+registerTool<CreatePrimitiveInput>({
+  name: 'create_primitive',
+  description: 'Create a primitive object in Blender.',
+  inputSchema: CreatePrimitiveInputSchema,
+  buildBlenderPayload: (payload) => ({
+    type: payload.primitiveType || payload.type,
+    location: normalizePosition(payload),
+    rotation: payload.rotation,
+    scale: payload.scale,
+    id: payload.id,
+    name: payload.name,
+  }),
+  mapResult: (payload, blenderResult) => {
+    const position = normalizePosition(payload)
+    const scale = payload.scale as Vector3
+    const primitiveType = normalizePrimitiveType(
+      (payload.primitiveType || payload.type)!
+    )
+    const objectId =
+      payload.id ||
+      `obj_${primitiveType}_${stableVectorHash(position, scale)}`
+    const name = payload.name || `${primitiveType}_${objectId}`
+
+    return {
+      objectId,
+      objectType: primitiveType,
+      name,
+      blender: blenderResult,
+    }
+  },
+})
+
+registerTool<TransformObjectInput>({
+  name: 'transform_object',
+  description: 'Transform an existing Blender object.',
+  inputSchema: TransformObjectInputSchema,
+  buildBlenderPayload: (payload) => ({
+    objectId: payload.objectId,
+    position: normalizeTransformPosition(payload),
+    rotation: payload.rotation,
+    scale: payload.scale,
+  }),
+  mapResult: (payload, blenderResult) => ({
+    objectId: payload.objectId,
+    transformed: true,
+    blender: blenderResult,
+  }),
+})
+
+registerTool<ImportAssetInput>({
+  name: 'import_asset',
+  description: 'Import an asset into Blender.',
+  inputSchema: ImportAssetInputSchema,
+  buildBlenderPayload: (payload) => ({
+    query: payload.query,
+    objectId: payload.objectId,
+    source: payload.source,
+    location: payload.location,
+    rotation: payload.rotation,
+    scale: payload.scale,
+  }),
+  mapResult: (payload, blenderResult) => ({
+    objectId:
+      payload.objectId ||
+      `asset_${payload.query.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`,
+    query: payload.query,
+    imported: true,
+    blender: blenderResult,
+  }),
+})
+
+type ExecutePlanInput = z.infer<typeof GenerationPlanSchema>
+
+const ExecutePlanInputSchema = GenerationPlanSchema.extend({
+  jobId: z.string().optional(),
+  outputDir: z.string().optional(),
+})
+
+type ExecutePlanPayload = z.infer<typeof ExecutePlanInputSchema>
+
+registerTool<ExecutePlanPayload>({
+  name: 'execute_plan',
+  description: 'Execute a complete GenerationPlan in Blender, creating scene objects and exporting.',
+  inputSchema: ExecutePlanInputSchema,
+  buildBlenderPayload: (payload) => ({
+    tool: 'execute_plan',
+    plan: {
+      id: payload.id,
+      projectId: payload.projectId,
+      title: payload.title,
+      description: payload.description,
+      objects: payload.objects,
+      lights: payload.lights,
+      camera: payload.camera,
+      units: payload.units,
+      scale: payload.scale,
+      outputFormat: payload.outputFormat,
+      qualityLevel: payload.qualityLevel,
+      constraints: payload.constraints,
+      tags: payload.tags,
+    },
+    jobId: payload.jobId,
+    outputDir: payload.outputDir,
+  }),
+  mapResult: (payload, blenderResult) => {
+    const result = blenderResult as Record<string, unknown> | null
+
+    return {
+      success: result?.success === true,
+      createdObjects: typeof result?.created_objects === 'number' ? result.created_objects : 0,
+      logs: Array.isArray(result?.logs) ? result.logs : [],
+      errors: Array.isArray(result?.errors) ? result.errors : [],
+      outputFile: typeof result?.output_file === 'string' ? result.output_file : undefined,
+      artifacts: Array.isArray(result?.artifacts)
+        ? (result.artifacts as Array<{ format: string; path: string; size?: number }>)
+        : [],
+      blender: result,
+    }
+  },
+})
+
+const ExportSceneInputSchema = z.object({
+  jobId: z.string().optional(),
+  formats: z.array(z.enum(['glb', 'fbx', 'stl'])).optional().default(['glb']),
+  outputDir: z.string().optional(),
+})
+
+type ExportSceneInput = z.infer<typeof ExportSceneInputSchema>
+
+registerTool<ExportSceneInput>({
+  name: 'export_scene',
+  description: 'Export the current Blender scene to GLB, FBX, or STL format.',
+  inputSchema: ExportSceneInputSchema,
+  buildBlenderPayload: (payload) => ({
+    tool: 'export_scene',
+    formats: payload.formats,
+    outputDir: payload.outputDir,
+    jobId: payload.jobId,
+  }),
+  mapResult: (payload, blenderResult) => {
+    const result = blenderResult as Record<string, unknown> | null
+
+    return {
+      success: result?.success === true,
+      exports: Array.isArray(result?.exports)
+        ? (result.exports as Array<{ format: string; path: string; size?: number }>)
+        : [],
+      logs: Array.isArray(result?.logs) ? result.logs : [],
+      errors: Array.isArray(result?.errors) ? result.errors : [],
+      blender: result,
+    }
+  },
+})
+
+export { registerTool }
+
+export function listTools(): Array<{ name: string; description: string }> {
   return Array.from(toolRegistry.values()).map((tool) => ({
     name: tool.name,
     description: tool.description,
   }))
 }
 
-export async function executeTool(toolName: string, payload: unknown): Promise<ToolExecutionResult> {
+export async function executeTool(
+  toolName: string,
+  payload: unknown
+): Promise<ToolExecutionResult> {
   if (!toolRegistry.has(toolName)) {
     throw new Error(`Unknown MCP tool: ${toolName}`)
   }
 
   const tool = toolRegistry.get(toolName)!
   const validatedPayload = tool.inputSchema.parse(payload)
+  const blenderPayload = tool.buildBlenderPayload(validatedPayload)
 
-  try {
-    const blenderResult = await executeInBlender(toolName, validatedPayload)
-    if (blenderResult.success) {
-      return {
-        result: blenderResult.result,
-        logs: [...blenderResult.logs, `Executed ${toolName} via Blender worker`],
-      }
-    }
+  console.log(
+    '[mcp-tool] -> executing',
+    JSON.stringify({ tool: toolName, payload: blenderPayload })
+  )
 
-    return {
-      ...tool.executeLocal(validatedPayload, {
-        now: () => new Date(0),
-      }),
-      logs: [
-        ...(blenderResult.logs || []),
-        `Blender worker rejected ${toolName}: ${blenderResult.error || 'unknown error'}`,
-        `Fell back to local execution for ${toolName}`,
-      ],
-    }
-  } catch (error) {
-    const fallback = tool.executeLocal(validatedPayload, {
-      now: () => new Date(0),
-    })
+  const blenderResponse = await callBlender(toolName, blenderPayload)
+  const result = tool.mapResult(validatedPayload, blenderResponse.parsed)
 
-    return {
-      result: fallback.result,
-      logs: [
-        `Blender worker unavailable for ${toolName}: ${error instanceof Error ? error.message : 'unknown error'}`,
-        ...fallback.logs,
-        `Fell back to local execution for ${toolName}`,
-      ],
-    }
+  return {
+    result,
+    logs: [
+      `Validated payload for ${toolName}`,
+      `Sent ${toolName} to Blender`,
+      `Blender raw response: ${blenderResponse.raw || '<empty>'}`,
+    ],
   }
-}
-
-export function executeToolLocal(toolName: string, payload: unknown): ToolExecutionResult {
-  if (!toolRegistry.has(toolName)) {
-    throw new Error(`Unknown MCP tool: ${toolName}`)
-  }
-
-  const tool = toolRegistry.get(toolName)!
-  const validatedPayload = tool.inputSchema.parse(payload)
-  return tool.executeLocal(validatedPayload, {
-    now: () => new Date(0),
-  })
 }

@@ -1,111 +1,101 @@
 import { Router, Request, Response } from 'express'
+import { runAgentTurn } from '../services/agentLoop'
+import { callMCPTool } from '../services/mcpClient'
+import { ChatMessage } from '../services/plannerService'
 
 export const chatRouter = Router()
 
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-}
+const DEFAULT_MCP_BRIDGE = 'http://localhost:8790'
 
 interface ChatRequest {
   messages: ChatMessage[]
-  model?: string
-  stream?: boolean
-  temperature?: number
-  top_p?: number
-  top_k?: number
+  sessionId?: string
+}
+
+interface ToolResultResponse {
+  type: 'tool_result'
+  tool: 'create_primitive'
+  result: unknown
+  logs: string[]
+}
+
+async function callMCP(
+  mcpEndpoint: string,
+  tool: string,
+  payload: Record<string, unknown>
+): Promise<Awaited<ReturnType<typeof callMCPTool>>> {
+  return callMCPTool(mcpEndpoint, tool, payload)
+}
+
+async function handlePrimitive(
+  mcpEndpoint: string,
+  type: string
+): Promise<ToolResultResponse> {
+  const result = await callMCP(mcpEndpoint, 'create_primitive', { type })
+
+  return {
+    type: 'tool_result',
+    tool: 'create_primitive',
+    result: result.result ?? null,
+    logs: result.logs ?? [],
+  }
 }
 
 chatRouter.post('/', async (req: Request, res: Response) => {
   try {
-    const { messages, model = 'qwen2.5-coder:latest', stream = false, temperature = 0.3, top_p = 0.9, top_k = 40 } = req.body as ChatRequest
+    console.log('[proxy] -> received request')
+
+    const { messages, sessionId = 'default' } = req.body as ChatRequest
 
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ error: 'messages array required' })
       return
     }
 
-    const ollamaUrl = req.app.locals.ollamaUrl
-    const ollamaEndpoint = `${ollamaUrl}/api/chat`
+    const ollamaUrl = req.app.locals.ollamaUrl as string
+    const mcpBridgeUrl = (req.app.locals.mcpBridgeUrl as string | undefined) || DEFAULT_MCP_BRIDGE
+    const mcpEndpoint = `${mcpBridgeUrl.replace(/\/$/, '')}/tools/call`
+    const lastMessage = messages[messages.length - 1]
+    const msg = (lastMessage?.content || '').toLowerCase().trim()
 
-    const ollamaRequest = {
-      model,
+    console.log('[proxy] -> evaluating hard rules')
+    console.log('🔥 NEW RULE ENGINE ACTIVE', msg)
+
+    let shape: string | undefined
+
+    if (/\bcylinder\b/.test(msg)) shape = 'cylinder'
+    else if (/\bsphere\b/.test(msg)) shape = 'sphere'
+    else if (/\bcube\b/.test(msg)) shape = 'cube'
+
+    if (shape) {
+      console.log('[proxy] -> hard rule matched', shape)
+      const response = await handlePrimitive(mcpEndpoint, shape)
+      return res.json(response)
+    }
+
+    const agentResponse = await runAgentTurn({
+      sessionId,
+      userInput: msg,
       messages,
-      stream,
-      temperature,
-      top_p,
-      top_k,
+      ollamaUrl,
+      mcpEndpoint,
+    })
+
+    if (agentResponse.type === 'tool_result') {
+      return res.json({
+        type: 'tool_result',
+        tool: agentResponse.tool,
+        result: agentResponse.result ?? null,
+        logs: agentResponse.logs ?? [],
+        sessionId: agentResponse.sessionId,
+      })
     }
 
-    if (stream) {
-      // Streaming response
-      res.setHeader('Content-Type', 'text/event-stream')
-      res.setHeader('Cache-Control', 'no-cache')
-      res.setHeader('Connection', 'keep-alive')
-
-      const response = await fetch(ollamaEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ollamaRequest),
-      })
-
-      if (!response.ok) {
-        res.status(response.status).json({ error: `Ollama error: ${response.statusText}` })
-        return
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        res.status(500).json({ error: 'No response body' })
-        return
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            if (line.trim()) {
-              try {
-                const json = JSON.parse(line)
-                res.write(`data: ${JSON.stringify(json)}\n\n`)
-              } catch {
-                // Skip invalid JSON lines
-              }
-            }
-          }
-        }
-
-        res.write('data: [DONE]\n\n')
-        res.end()
-      } catch (err) {
-        res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`)
-        res.end()
-      }
-    } else {
-      // Non-streaming response
-      const response = await fetch(ollamaEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ollamaRequest),
-      })
-
-      if (!response.ok) {
-        res.status(response.status).json({ error: `Ollama error: ${response.statusText}` })
-        return
-      }
-
-      const data = await response.json()
-      res.json(data)
-    }
+    return res.json({
+      type: 'text',
+      message: agentResponse.message ?? '',
+      sessionId: agentResponse.sessionId,
+    })
   } catch (error) {
     console.error('Chat error:', error)
     res.status(500).json({ error: error instanceof Error ? error.message : 'Chat request failed' })

@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '@/hooks/useAuth'
+import { useJobStatusRealtime } from '@/hooks/useJobStatusRealtime'
 import { useStudioStore } from '@/store/studioStore'
 import { StudioNode, NodeType } from '@/types/studio'
+import { GenerationJob } from '@/types/generation'
 import { ProjectDoc } from '@/types/firebase'
 import { getProject, saveProjectStudio } from '@/services/firestore'
-import { compileNodesToPrompt, isProjectReadyForExecution } from '@/services/nodeCompiler'
+import { compileNodesToPrompt, isProjectReadyForExecution, compileNodesToGenerationPlanDraft, validateGenerationPlan } from '@/services/nodeCompiler'
 import { generateScenePlan } from '@/services/ai/ollamaService'
+import { createGenerationJob } from '@/services/generationJobService'
 import { v4 as uuidv4 } from 'uuid'
 
 import { StudioHeader } from '@/components/studio/StudioHeader'
@@ -29,6 +32,27 @@ export function ProjectStudio() {
   const [currentPipelineStep, setCurrentPipelineStep] = useState<'concept' | 'structure' | 'validated' | 'executing' | 'complete'>('concept')
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionError, setExecutionError] = useState<string>()
+  const [currentJob, setCurrentJob] = useState<GenerationJob | null>(null)
+  const [executionProgress, setExecutionProgress] = useState(0)
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+
+  // Real-time job updates via WebSocket
+  useJobStatusRealtime(currentJobId, (job) => {
+    setCurrentJob(job)
+    // Calculate progress based on status
+    const statusProgress: Record<string, number> = {
+      queued: 0,
+      planning: 20,
+      validating: 40,
+      sending_to_blender: 50,
+      executing_blender: 75,
+      exporting: 90,
+      complete: 100,
+      failed: 100,
+      cancelled: 100,
+    }
+    setExecutionProgress(statusProgress[job.status] ?? 40)
+  })
 
   const nodes = useStudioStore((state) => state.nodes)
   const viewport = useStudioStore((state) => state.viewport)
@@ -124,6 +148,30 @@ export function ProjectStudio() {
     }
   }, [isDirty, saveProject])
 
+  // Handle job completion
+  useEffect(() => {
+    if (!currentJob || !isExecuting) return
+
+    const isTerminal =
+      currentJob.status === 'complete' ||
+      currentJob.status === 'failed' ||
+      currentJob.status === 'cancelled'
+
+    if (!isTerminal) return
+
+    // Job completed
+    if (currentJob.status === 'failed') {
+      setExecutionError(currentJob.errors.join('; ') || 'Job failed')
+      setCurrentPipelineStep('concept')
+    } else if (currentJob.status === 'complete') {
+      setCurrentPipelineStep('complete')
+      setExecutionProgress(100)
+    }
+
+    setIsExecuting(false)
+    setCurrentJobId(null) // Disconnect WebSocket
+  }, [currentJob, isExecuting])
+
   // Handle node addition
   const handleAddNode = (type: NodeType) => {
     const newNode: StudioNode = {
@@ -147,7 +195,7 @@ export function ProjectStudio() {
     // TODO: Implement context menu for adding nodes at cursor position
   }
 
-  // Handle execute pipeline
+  // Handle execute pipeline - real job-based execution
   const handleExecutePipeline = async () => {
     const readiness = isProjectReadyForExecution(nodes)
     if (!readiness.ready) {
@@ -155,33 +203,73 @@ export function ProjectStudio() {
       return
     }
 
+    if (!user) {
+      setExecutionError('User not authenticated')
+      return
+    }
+
     setIsExecuting(true)
     setExecutionError(undefined)
     setCurrentPipelineStep('structure')
+    setExecutionProgress(0)
 
     try {
-      // Compile nodes to prompt
+      // Step 1: Compile nodes to text prompt
       const prompt = compileNodesToPrompt(nodes, project?.name || 'Untitled')
+      console.log('Compiled prompt:', prompt)
 
-      // Send to generation pipeline
+      // Step 2: Generate AI plan from prompt
       setCurrentPipelineStep('validated')
+      setExecutionProgress(20)
 
-      const result = await generateScenePlan(prompt)
+      const planResult = await generateScenePlan(prompt)
 
-      if (!result.success) {
-        setExecutionError(result.error || 'Failed to generate scene plan')
+      if (!planResult.success) {
+        setExecutionError(planResult.error || 'Failed to generate scene plan')
         setCurrentPipelineStep('concept')
+        setIsExecuting(false)
         return
       }
 
-      // TODO: Save generation to Firestore
-      setCurrentPipelineStep('executing')
+      // Step 3: Create structured plan from nodes
+      const structuredPlan = compileNodesToGenerationPlanDraft(
+        nodes,
+        projectId!,
+        project?.name || 'Untitled'
+      )
 
-      // TODO: Wait for execution completion
-      setTimeout(() => {
-        setCurrentPipelineStep('complete')
+      // Step 4: Validate structured plan
+      const validationErrors = validateGenerationPlan(structuredPlan)
+      if (validationErrors.length > 0) {
+        setExecutionError(`Validation failed: ${validationErrors.join('; ')}`)
+        setCurrentPipelineStep('concept')
         setIsExecuting(false)
-      }, 2000)
+        return
+      }
+
+      setCurrentPipelineStep('executing')
+      setExecutionProgress(40)
+
+      // Step 5: Create Blender job
+      const jobResult = await createGenerationJob(
+        projectId!,
+        user.id,
+        prompt,
+        structuredPlan
+      )
+
+      if ('error' in jobResult) {
+        setExecutionError(jobResult.error)
+        setCurrentPipelineStep('concept')
+        setIsExecuting(false)
+        return
+      }
+
+      const { job, jobId } = jobResult
+      setCurrentJob(job)
+      setCurrentJobId(jobId) // Set up WebSocket listener
+      console.log('Created job:', jobId)
+      // Job completion is now handled by the useEffect that watches currentJob
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
       setExecutionError(errorMsg)
@@ -255,6 +343,8 @@ export function ProjectStudio() {
         currentStep={currentPipelineStep}
         isExecuting={isExecuting}
         executionError={executionError}
+        executionProgress={executionProgress}
+        currentJob={currentJob}
         onExecute={handleExecutePipeline}
       />
     </div>

@@ -5,6 +5,8 @@ import math
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
 
 try:
     import bpy  # type: ignore
@@ -13,10 +15,18 @@ except ImportError:  # Allows HTTP server imports outside Blender for health che
 
 
 Vector3 = tuple[float, float, float]
-ALLOWED_TOOLS = {"create_primitive", "transform_object", "apply_material", "export_scene"}
+ALLOWED_TOOLS = {"create_primitive", "transform_object", "apply_material", "import_asset", "export_scene"}
 ALLOWED_PRIMITIVES = {"box", "cube", "sphere", "cylinder"}
 EXPORT_DIR = Path(os.environ.get("BLENDER_WORKER_EXPORT_DIR", Path.cwd() / "exports"))
 SNAPSHOT_DIR = Path(os.environ.get("BLENDER_WORKER_SNAPSHOT_DIR", Path.cwd() / "snapshots"))
+ASSET_DIR = Path(os.environ.get("BLENDER_WORKER_ASSET_DIR", Path.cwd() / "assets"))
+ASSET_CACHE_DIR = Path(os.environ.get("BLENDER_WORKER_ASSET_CACHE_DIR", Path.cwd() / ".asset-cache"))
+ASSET_QUERY_MAP: dict[str, str] = {
+    "modern chair": "modern-chair.glb",
+    "chair": "chair.glb",
+    "modern table": "modern-table.glb",
+    "table": "table.glb",
+}
 
 
 def execute_tool(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -31,6 +41,8 @@ def execute_tool(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         return transform_object(payload)
     if tool == "apply_material":
         return apply_material(payload)
+    if tool == "import_asset":
+        return import_asset(payload)
     if tool == "export_scene":
         return export_scene(payload)
 
@@ -142,6 +154,45 @@ def export_scene(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def import_asset(payload: dict[str, Any]) -> dict[str, Any]:
+    query = required_string(payload, "query").strip().lower()
+    source = payload.get("source")
+    object_id = safe_id(payload.get("objectId") or f"asset_{query.replace(' ', '_')}")
+    location = parse_vector3(payload.get("location"), (0.0, 0.0, 0.0))
+    rotation = parse_vector3(payload.get("rotation"), (0.0, 0.0, 0.0))
+    scale = parse_vector3(payload.get("scale"), (1.0, 1.0, 1.0))
+    asset_path = resolve_asset_path(query, source)
+    imported_before = {obj.name for obj in bpy.data.objects}
+
+    if asset_path.suffix.lower() in {".glb", ".gltf"}:
+        bpy.ops.import_scene.gltf(filepath=str(asset_path))
+    elif asset_path.suffix.lower() == ".obj":
+        bpy.ops.wm.obj_import(filepath=str(asset_path))
+    else:
+        raise ValueError(f"Unsupported asset format: {asset_path.suffix.lower()}")
+
+    imported_objects = [obj for obj in bpy.data.objects if obj.name not in imported_before]
+    if not imported_objects:
+        raise RuntimeError("Asset import did not create any objects")
+
+    base_name = query.replace(" ", "_")
+    for index, obj in enumerate(imported_objects):
+        obj.name = unique_object_name(base_name if index == 0 else f"{base_name}_{index}")
+        obj["mcp_object_id"] = object_id if index == 0 else f"{object_id}_{index}"
+        obj.location = location
+        obj.rotation_euler = rotation
+        obj.scale = scale
+
+    primary = imported_objects[0]
+    return {
+        "objectId": object_id,
+        "query": query,
+        "path": str(asset_path),
+        "imported": True,
+        "object": object_to_result(primary, object_id, "asset"),
+    }
+
+
 def normalize_primitive_type(value: Any) -> str:
     primitive_type = str(value or "").lower()
     if primitive_type == "cube":
@@ -186,11 +237,69 @@ def safe_filename(value: str) -> str:
     return value[:128]
 
 
+def resolve_asset_path(query: str, source: Any) -> Path:
+    if isinstance(source, str) and source:
+        return resolve_asset_source(source)
+
+    mapped = ASSET_QUERY_MAP.get(query)
+    if mapped:
+        return resolve_asset_source(mapped)
+
+    normalized = query.replace(" ", "-")
+    candidates = [
+        ASSET_DIR / f"{normalized}.glb",
+        ASSET_DIR / f"{normalized}.gltf",
+        ASSET_DIR / f"{normalized}.obj",
+        ASSET_DIR / f"{query}.glb",
+        ASSET_DIR / f"{query}.obj",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    raise ValueError(f"No asset found for query: {query}")
+
+
+def resolve_asset_source(source: str) -> Path:
+    parsed = urlparse(source)
+    if parsed.scheme in {"http", "https"}:
+        ASSET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        filename = Path(parsed.path).name or "downloaded_asset.glb"
+        cached_path = ASSET_CACHE_DIR / safe_filename(filename)
+        if not cached_path.exists():
+            urlretrieve(source, cached_path)
+        return cached_path
+
+    direct_path = Path(source)
+    if direct_path.exists():
+        return direct_path
+
+    asset_path = ASSET_DIR / source
+    if asset_path.exists():
+        return asset_path
+
+    raise ValueError(f"Asset source not found: {source}")
+
+
 def find_object(object_id: str):
     for obj in bpy.data.objects:
         if obj.get("mcp_object_id") == object_id or obj.name == object_id:
             return obj
     return None
+
+
+def unique_object_name(base_name: str) -> str:
+    candidate = safe_id(base_name)
+    if candidate not in bpy.data.objects:
+        return candidate
+
+    index = 1
+    while True:
+        name = f"{candidate}_{index}"
+        if name not in bpy.data.objects:
+            return name
+        index += 1
 
 
 def ensure_material(obj):
