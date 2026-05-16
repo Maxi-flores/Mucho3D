@@ -175,7 +175,14 @@ async function forwardToProxyServer(prompt: string, metadata: {
       }
     }
 
-    const data = await response.json()
+    const data = await response.json() as {
+      success: boolean
+      plan?: any
+      result?: any
+      sceneUrl?: string
+      error?: string
+    }
+
     return data
 
   } catch (error) {
