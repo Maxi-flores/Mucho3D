@@ -2,6 +2,10 @@ import { Router, Request, Response } from 'express'
 
 export const healthRouter = Router()
 
+interface BlenderHealthResponse {
+  ok?: unknown
+}
+
 healthRouter.get('/', async (req: Request, res: Response) => {
   try {
     const ollamaUrl = req.app.locals.ollamaUrl
@@ -42,7 +46,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
             const blenderResponse = await fetch(`${mcpBridgeUrl}/blender/health`, {
               signal: AbortSignal.timeout(5000),
             })
-            const blenderData = await blenderResponse.json()
+            const blenderData = (await blenderResponse.json()) as BlenderHealthResponse
             blenderReachable = Boolean(blenderData.ok)
           } catch {
             // Blender not reachable

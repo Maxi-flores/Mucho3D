@@ -51,7 +51,7 @@ snapshotRouter.post('/upload', async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         error: 'Invalid snapshot data format',
-        details: error.errors,
+        details: error.issues,
       })
       return
     }

@@ -3,6 +3,21 @@ import { z } from 'zod'
 
 export const whatsappRouter = Router()
 
+interface GeneratedPlanObject {
+  type?: unknown
+  position?: unknown
+  rotation?: unknown
+  scale?: unknown
+  color?: unknown
+  name?: unknown
+}
+
+interface GeneratePlanResponse {
+  plan?: {
+    objects?: GeneratedPlanObject[]
+  }
+}
+
 // Schema for WhatsApp generation request
 const WhatsAppGenerateSchema = z.object({
   prompt: z.string().min(1),
@@ -43,10 +58,10 @@ whatsappRouter.post('/generate', async (req: Request, res: Response) => {
       throw new Error(`Plan generation failed: ${planResponse.status}`)
     }
 
-    const planData = await planResponse.json()
+    const planData = (await planResponse.json()) as GeneratePlanResponse
 
     // Execute the plan through MCP bridge
-    const executionResults = []
+    const executionResults: unknown[] = []
     if (planData.plan && planData.plan.objects) {
       for (const obj of planData.plan.objects) {
         const toolCall = {
