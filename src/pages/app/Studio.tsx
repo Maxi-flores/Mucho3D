@@ -5,7 +5,7 @@ import { Play, Pause, RotateCcw, Download, Save, MessageSquare } from 'lucide-re
 import { DashboardLayout } from '@/components/layout'
 import { Scene3D, EngineeringGrid, WireframeMesh, CameraController, Lights, FloatingHUD, CameraTracker } from '@/components/3d'
 import { ChatInterface, CommandPalette } from '@/components/ai'
-import { ObjectInspector, ObjectList } from '@/components/studio'
+import { ObjectInspector, ObjectList, SnapshotGallery } from '@/components/studio'
 import { Panel, Button, Badge } from '@/components/ui'
 import { useSceneStore } from '@/store'
 import { useUIStore } from '@/store'
@@ -221,6 +221,20 @@ export function Studio() {
 
               {/* Object Inspector */}
               <ObjectInspector />
+
+              {/* Snapshot Gallery - Only show if projectId exists */}
+              {projectId && (
+                <SnapshotGallery
+                  projectId={projectId}
+                  onSnapshotClick={(snapshot) => {
+                    addToast({
+                      type: 'info',
+                      title: 'Snapshot Selected',
+                      description: snapshot.filename,
+                    })
+                  }}
+                />
+              )}
 
               {/* Actions */}
               <Panel title="File Operations">

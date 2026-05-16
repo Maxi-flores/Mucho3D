@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import math
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -17,6 +19,7 @@ Vector3 = tuple[float, float, float]
 ALLOWED_TOOLS = {"create_primitive", "transform_object", "apply_material", "import_asset", "export_scene"}
 ALLOWED_PRIMITIVES = {"box", "cube", "sphere", "cylinder"}
 EXPORT_DIR = Path(os.environ.get("BLENDER_WORKER_EXPORT_DIR", Path.cwd() / "exports"))
+SNAPSHOT_DIR = Path(os.environ.get("BLENDER_WORKER_SNAPSHOT_DIR", Path.cwd() / "snapshots"))
 ASSET_DIR = Path(os.environ.get("BLENDER_WORKER_ASSET_DIR", Path.cwd() / "assets"))
 ASSET_CACHE_DIR = Path(os.environ.get("BLENDER_WORKER_ASSET_CACHE_DIR", Path.cwd() / ".asset-cache"))
 ASSET_QUERY_MAP: dict[str, str] = {
@@ -237,11 +240,16 @@ def safe_filename(value: str) -> str:
 
 def resolve_asset_path(query: str, source: Any) -> Path:
     if isinstance(source, str) and source:
-        return resolve_asset_source(source)
+        parsed_source = urlparse(source)
+        if parsed_source.scheme in {"http", "https"}:
+            return resolve_asset_source(source)
+        raise ValueError("Asset source must be an http(s) URL")
 
     mapped = ASSET_QUERY_MAP.get(query)
     if mapped:
-        return resolve_asset_source(mapped)
+        mapped_path = ASSET_DIR / mapped
+        if mapped_path.exists():
+            return mapped_path
 
     normalized = query.replace(" ", "-")
     candidates = [
@@ -261,23 +269,18 @@ def resolve_asset_path(query: str, source: Any) -> Path:
 
 def resolve_asset_source(source: str) -> Path:
     parsed = urlparse(source)
-    if parsed.scheme in {"http", "https"}:
-        ASSET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        filename = Path(parsed.path).name or "downloaded_asset.glb"
-        cached_path = ASSET_CACHE_DIR / safe_filename(filename)
-        if not cached_path.exists():
-            urlretrieve(source, cached_path)
-        return cached_path
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Asset source URL must use http or https")
 
-    direct_path = Path(source)
-    if direct_path.exists():
-        return direct_path
+    ASSET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    extension = Path(parsed.path).suffix.lower()
+    if extension not in {".glb", ".gltf", ".obj"}:
+        extension = ".glb"
 
-    asset_path = ASSET_DIR / source
-    if asset_path.exists():
-        return asset_path
-
-    raise ValueError(f"Asset source not found: {source}")
+    filename = f"asset_{uuid.uuid4().hex}{extension}"
+    cached_path = ASSET_CACHE_DIR / filename
+    urlretrieve(source, cached_path)
+    return cached_path
 
 
 def find_object(object_id: str):
@@ -337,3 +340,65 @@ def object_to_result(obj, object_id: str, primitive_type: str) -> dict[str, Any]
             "scale": list(obj.scale),
         },
     }
+
+
+def capture_viewport_snapshot() -> dict[str, Any]:
+    """
+    Capture a snapshot of the current Blender viewport.
+    Returns a dictionary with the snapshot data (base64 encoded) and metadata.
+    """
+    if bpy is None:
+        raise RuntimeError("Blender bpy module is not available")
+
+    # Ensure snapshot directory exists
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    import time
+    timestamp = int(time.time() * 1000)
+    snapshot_filename = f"snapshot_{timestamp}.png"
+    snapshot_path = SNAPSHOT_DIR / snapshot_filename
+
+    # Store original render settings
+    scene = bpy.context.scene
+    original_filepath = scene.render.filepath
+    original_resolution_x = scene.render.resolution_x
+    original_resolution_y = scene.render.resolution_y
+    original_file_format = scene.render.image_settings.file_format
+
+    try:
+        # Configure render settings for snapshot
+        scene.render.filepath = str(snapshot_path)
+        scene.render.resolution_x = 1920
+        scene.render.resolution_y = 1080
+        scene.render.image_settings.file_format = 'PNG'
+        scene.render.image_settings.color_mode = 'RGBA'
+
+        # Render the current viewport
+        bpy.ops.render.render(write_still=True)
+
+        # Read the rendered image and encode to base64
+        with open(snapshot_path, 'rb') as f:
+            image_data = f.read()
+            base64_data = base64.b64encode(image_data).decode('utf-8')
+
+        # Get file size
+        file_size = len(image_data)
+
+        return {
+            "filename": snapshot_filename,
+            "path": str(snapshot_path),
+            "base64": base64_data,
+            "format": "png",
+            "width": 1920,
+            "height": 1080,
+            "size": file_size,
+            "timestamp": timestamp
+        }
+
+    finally:
+        # Restore original render settings
+        scene.render.filepath = original_filepath
+        scene.render.resolution_x = original_resolution_x
+        scene.render.resolution_y = original_resolution_y
+        scene.render.image_settings.file_format = original_file_format

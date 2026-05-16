@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Topbar } from './Topbar'
 import { Sidebar } from './Sidebar'
@@ -12,9 +12,22 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const sidebarState = useUIStore((state) => state.sidebarState)
+  const [isHovered, setIsHovered] = useState(false)
 
-  const isExpanded = sidebarState === 'expanded'
+  const isExpanded = isHovered || sidebarState === 'expanded'
   const sidebarWidth = isExpanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed
+
+  // Listen to sidebar hover state via custom event
+  useEffect(() => {
+    const handleSidebarHover = (e: CustomEvent) => {
+      setIsHovered(e.detail.isHovered)
+    }
+
+    window.addEventListener('sidebar-hover', handleSidebarHover as EventListener)
+    return () => {
+      window.removeEventListener('sidebar-hover', handleSidebarHover as EventListener)
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">

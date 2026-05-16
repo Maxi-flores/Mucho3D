@@ -34,7 +34,18 @@ def execute(request: ExecuteRequest) -> dict[str, Any]:
     started_at = time.perf_counter()
 
     try:
+        # Execute the tool
         result = execute_tool(request.tool, request.payload)
+
+        # Capture snapshot after successful execution
+        snapshot = None
+        snapshot_enabled = request.payload.get("captureSnapshot", True)
+
+        if snapshot_enabled and request.tool in ["create_primitive", "transform_object", "apply_material"]:
+            from run_tool import capture_viewport_snapshot
+            snapshot = capture_viewport_snapshot()
+            result["snapshot"] = snapshot
+
         duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
         return {
             "success": True,

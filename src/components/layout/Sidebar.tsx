@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Box,
@@ -26,9 +27,18 @@ const navigation = [
 export function Sidebar() {
   const sidebarState = useUIStore((state) => state.sidebarState)
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
+  const [isHovered, setIsHovered] = useState(false)
 
-  const isExpanded = sidebarState === 'expanded'
+  const isExpanded = isHovered || sidebarState === 'expanded'
   const width = isExpanded ? SIDEBAR_WIDTH.expanded : SIDEBAR_WIDTH.collapsed
+
+  // Dispatch custom event when hover state changes
+  useEffect(() => {
+    const event = new CustomEvent('sidebar-hover', {
+      detail: { isHovered },
+    })
+    window.dispatchEvent(event)
+  }, [isHovered])
 
   return (
     <motion.aside
@@ -41,6 +51,8 @@ export function Sidebar() {
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
       className="fixed left-0 z-40 h-screen glass-panel border-r border-white/5"
       style={{ top: TOPBAR_HEIGHT }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="h-full flex flex-col">
         {/* Navigation */}

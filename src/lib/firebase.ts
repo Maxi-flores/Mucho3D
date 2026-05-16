@@ -1,6 +1,7 @@
 import { initializeApp, FirebaseApp } from 'firebase/app'
 import { getAuth, Auth } from 'firebase/auth'
 import { getFirestore, Firestore } from 'firebase/firestore'
+import { getStorage, FirebaseStorage } from 'firebase/storage'
 
 // Check if Firebase is configured
 export const isFirebaseConfigured = (): boolean => {
@@ -10,6 +11,7 @@ export const isFirebaseConfigured = (): boolean => {
 let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
+let storage: FirebaseStorage | null = null
 
 // Initialize Firebase only if configuration is available
 if (isFirebaseConfigured()) {
@@ -26,6 +28,7 @@ if (isFirebaseConfigured()) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
+  storage = getStorage(app)
 
   // Set up Firestore persistence (browser only)
   if (typeof window !== 'undefined') {
@@ -37,8 +40,10 @@ if (isFirebaseConfigured()) {
 export const getFirebaseApp = (): FirebaseApp | null => app
 export const getFirebaseAuth = (): Auth | null => auth
 export const getFirebaseDb = (): Firestore | null => db
+export const getFirebaseStorage = (): FirebaseStorage | null => storage
 
 // For convenient imports when Firebase is guaranteed to be configured
 export const firebaseApp = app as FirebaseApp
 export const firebaseAuth = auth as Auth
 export const firebaseDb = db as Firestore
+export const firebaseStorage = storage as FirebaseStorage
