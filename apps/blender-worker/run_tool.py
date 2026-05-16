@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import math
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -239,11 +240,16 @@ def safe_filename(value: str) -> str:
 
 def resolve_asset_path(query: str, source: Any) -> Path:
     if isinstance(source, str) and source:
-        return resolve_asset_source(source)
+        parsed_source = urlparse(source)
+        if parsed_source.scheme in {"http", "https"}:
+            return resolve_asset_source(source)
+        raise ValueError("Asset source must be an http(s) URL")
 
     mapped = ASSET_QUERY_MAP.get(query)
     if mapped:
-        return resolve_asset_source(mapped)
+        mapped_path = ASSET_DIR / mapped
+        if mapped_path.exists():
+            return mapped_path
 
     normalized = query.replace(" ", "-")
     candidates = [
@@ -263,23 +269,18 @@ def resolve_asset_path(query: str, source: Any) -> Path:
 
 def resolve_asset_source(source: str) -> Path:
     parsed = urlparse(source)
-    if parsed.scheme in {"http", "https"}:
-        ASSET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        filename = Path(parsed.path).name or "downloaded_asset.glb"
-        cached_path = ASSET_CACHE_DIR / safe_filename(filename)
-        if not cached_path.exists():
-            urlretrieve(source, cached_path)
-        return cached_path
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Asset source URL must use http or https")
 
-    direct_path = Path(source)
-    if direct_path.exists():
-        return direct_path
+    ASSET_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    extension = Path(parsed.path).suffix.lower()
+    if extension not in {".glb", ".gltf", ".obj"}:
+        extension = ".glb"
 
-    asset_path = ASSET_DIR / source
-    if asset_path.exists():
-        return asset_path
-
-    raise ValueError(f"Asset source not found: {source}")
+    filename = f"asset_{uuid.uuid4().hex}{extension}"
+    cached_path = ASSET_CACHE_DIR / filename
+    urlretrieve(source, cached_path)
+    return cached_path
 
 
 def find_object(object_id: str):
