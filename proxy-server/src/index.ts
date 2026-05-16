@@ -47,7 +47,6 @@ app.use('/api/mcp', mcpRouter)
 app.use('/api/whatsapp', whatsappRouter)
 app.use('/api/snapshot', snapshotRouter)
 app.use('/api/blender/jobs', blenderJobsRouter)
-app.use('/api/blender/jobs', blenderJobsRouter)
 
 // Health check endpoint
 app.get('/health', (req, res) => {
