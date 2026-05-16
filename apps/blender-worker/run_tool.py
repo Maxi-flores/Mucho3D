@@ -57,6 +57,7 @@ def create_primitive(payload: dict[str, Any]) -> dict[str, Any]:
     position = parse_vector3(payload.get("position"), (0.0, 0.0, 0.0))
     rotation = parse_vector3(payload.get("rotation"), (0.0, 0.0, 0.0))
     scale = parse_vector3(payload.get("scale"), (1.0, 1.0, 1.0))
+    objects_before = {obj.name for obj in bpy.data.objects}
 
     if primitive_type == "box":
         bpy.ops.mesh.primitive_cube_add(size=1, location=position, rotation=rotation)
@@ -65,7 +66,10 @@ def create_primitive(payload: dict[str, Any]) -> dict[str, Any]:
     elif primitive_type == "cylinder":
         bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.5, depth=1, location=position, rotation=rotation)
 
-    obj = bpy.context.object
+    obj = get_active_object(objects_before)
+    if obj is None:
+        raise RuntimeError("Primitive creation did not create an active object")
+
     obj.name = name
     obj["mcp_object_id"] = object_id
     obj.scale = scale
@@ -287,6 +291,26 @@ def find_object(object_id: str):
     for obj in bpy.data.objects:
         if obj.get("mcp_object_id") == object_id or obj.name == object_id:
             return obj
+    return None
+
+
+def get_active_object(objects_before: set[str] | None = None):
+    context = bpy.context
+    view_layer = getattr(context, "view_layer", None)
+    view_layer_objects = getattr(view_layer, "objects", None)
+    active = getattr(view_layer_objects, "active", None)
+    if active is not None:
+        return active
+
+    active = getattr(context, "active_object", None)
+    if active is not None:
+        return active
+
+    if objects_before is not None:
+        for obj in reversed(list(bpy.data.objects)):
+            if obj.name not in objects_before:
+                return obj
+
     return None
 
 
